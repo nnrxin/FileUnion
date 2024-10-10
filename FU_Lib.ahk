@@ -4,9 +4,9 @@ if !AHK_DirInstallTo(AHK_DATA_DIR_PATH := A_AppData "\AHKDATA")    ;非覆盖安
 	MsgBox "XL\XL库文件安装错误!"
 DllCall('LoadLibrary', 'str', AHK_DATA_DIR_PATH '\XL\' (A_PtrSize * 8) 'bit\libxl.dll', 'ptr')
 #Include <XL\XL>
+;其他必要库
 #Include <File\Path>
 #Include <DB\ADODB>
-
 
 
 Class FileUnion {
@@ -49,7 +49,7 @@ Class FileUnion {
 		; 静态参数
 		static WorkingDir := A_ScriptDir
 		static Encoding := "UTF-8"
-		static defaultSubConfig := [
+		static defaultRule := [
 			["表序号"     , "1"                          , ""      ],
 			["表名称"     , ""                           , ""      ],
 			["2,1"        , "(日期|date)"                , ""      ],
@@ -68,26 +68,81 @@ Class FileUnion {
 			["[检验员]"   , "8"                          , ""      ],
 		]
 
+
 		; 实例管理
 		static instances := Map() ; 实例集合
 		static activeConfig := "" ; 当前活动配置
-		static Has(key) => this.instances.Has(key) ; 判断是否有该实例
+		static Has(name) => this.instances.Has(name) ; 判断是否有该实例
+		static Count() => this.instances.Count() ; 实例数量
 		static __Enum(NumberOfVars) => this.instances.__Enum(NumberOfVars) ; 枚举实例
-		static __Item[key] {
+		static __Item[name] {
 			get {
-				if this.instances.Has(key)
-					return this.instances[key]
-				throw Error('IMData ' key ' does not exist')
+				if this.instances.Has(name)
+					return this.instances[name]
+				throw Error('Config [' name '] does not exist')
 			}
 			set {
-				this.instances[key] := value
+				this.instances[name] := value
 			}
 		}
 		static Add(name) {
-			if !FileUnion.Configs.Has(name)
-				FileUnion.Configs[name] := FileUnion.Configs(name)
-			return FileUnion.Configs.activeConfig := FileUnion.Configs[name]
+			if !this.Has(name)
+				this[name] := this(name)
+			return this.activeConfig := this[name]
 		}
+		static Clone(name, cloneFromName) {
+			if this.Has(name)
+				throw Error('Config [' name '] already exist')
+			else if !this.Has(cloneFromName)
+				throw Error('Config [' cloneFromName '] does not exist')
+			this[name] := this(name)
+			this[name].rules := this[cloneFromName].rules.Clone()
+			this[name].deepRules := this[cloneFromName].deepRules.Clone()
+			return this.activeConfig := this[name]
+		}
+		static Switch(name) {
+			if !this.Has(name)
+				throw Error('Config [' name '] does not exist')
+			return this.activeConfig := this[name]
+		}
+		static ReName(name, NewName, Overwrite := true) {
+			if this.Has(NewName)
+				throw Error('Config [' NewName '] already exist')
+			if this[name].ReName(NewName, Overwrite)
+				return 1 ; 重命名失败
+			this.instances[NewName] := this.instances[name]
+			this.instances.Delete(name)
+		}
+		static Delete(name) {
+			if !this.Has(name)
+				throw Error('Config [' name '] does not exist')
+			if this.activeConfig.name = name
+				this.activeConfig := ""
+			try FileDelete(this[name].FilePath) ; 尝试删除文件
+			this[name] := ""
+			this.instances.Delete(name)
+		}
+		static Clear() {
+			this.activeConfig := ""
+			this.instances.Clear()
+		}
+		;获取文件夹中的JSON文件并加载
+		static LoadAllFromFiles(dirPath?) {
+			if IsSet(dirPath) && DirExist(dirPath)
+				this.WorkingDir := dirPath
+			this.Clear()
+			Loop Files, this.WorkingDir "\*.json" {
+				if RegExMatch(A_LoopFileName, "i)^config-(.*).json$", &SubPat)
+					this.Add(SubPat[1]).LoadFromFile()
+			}
+		}
+		;保存LV参数到JSON文件
+		static SaveAllToFiles() {
+			for _, config in this.instances
+			    config.SaveToFile()
+		}
+		; 获取规则模板
+		static GetDefaultRule() => this.defaultRule.Clone()
 
 
 		; 构造函数
@@ -96,28 +151,38 @@ Class FileUnion {
 			this.WorkingDir := FileUnion.Configs.WorkingDir
 			this.Encoding := FileUnion.Configs.Encoding
 			this.FilePath := this.WorkingDir "\config-" name ".json"
-			this.items := [[],[],[],[],[],[],[],[],[],[]] ; 预设10个配置
-			this.deepConfigs := []
+			this.rules := [[],[],[],[],[],[],[],[],[],[]] ; 预设10个配置
+			this.deepRules := []
 		}
-
+		; 删除
+		__Delete() {
+		}
+		; 枚举实例
+		__Enum(NumberOfVars) => this.rules.__Enum(NumberOfVars) 
 		; 数组方式调用
 		__Item[i] {
 			get {
-				return this.items[i]
+				return this.rules[i]
 			}
 			set {
-				this.items[i] := value
+				this.rules[i] := value
 			}
 		}
-		; 枚举实例
-		__Enum(NumberOfVars) => this.items.__Enum(NumberOfVars) 
 
-		; 获取模板
-		GetDefault() => FileUnion.Configs.defaultSubConfig.Clone()
-
+		; 重命名,失败时返回1
+		ReName(NewName, Overwrite := true) {
+			this.name := NewName
+			newFilePath := this.WorkingDir "\config-" NewName ".json"
+			if FileExist(this.FilePath) {
+				try FileMove(this.FilePath, newFilePath, Overwrite)
+				catch
+					return 1
+			}
+			this.FilePath := this.WorkingDir "\config-" NewName ".json"
+		}
 		;从JSON文件加载参数,失败返回1
 		LoadFromFile() {
-			try this.items := JSON.parse(FileRead(this.FilePath, this.Encoding))
+			try this.rules := JSON.parse(FileRead(this.FilePath, this.Encoding))
 			catch
 				return 1
 		}
@@ -125,41 +190,41 @@ Class FileUnion {
 		SaveToFile() {
 			DirCreate Path_Dir(this.FilePath)
 			try FileDelete(this.FilePath)
-			FileAppend(JSON.stringify(this.items), this.FilePath, this.Encoding)
+			FileAppend(JSON.stringify(this.rules), this.FilePath, this.Encoding)
 		}
 
 		;转化成底层配置
 		ConvertToDeep() {
-			this.deepConfigs.Length := 0
-			for _, SubConfig in this.items {
-				;跳过空配置
-				if !SubConfig.Length
+			this.deepRules.Length := 0
+			for _, rule in this.rules {
+				;跳过空规则
+				if !rule.Length
 					continue
-				deepConfig := {}
-				this.deepConfigs.Push(deepConfig)
+				deepRule := {}
+				this.deepRules.Push(deepRule)
 				;确定各参数
-				deepConfig.match := []       ; 匹配信息
-				deepConfig.fields := []      ; 字段信息
-				for i, arr in SubConfig {
+				deepRule.match := []       ; 匹配信息
+				deepRule.fields := []      ; 字段信息
+				for i, arr in rule {
 					k := arr[1], v := arr[2], v2 := arr[3]
 					if !k && !v
 						continue
 					else if (k = "表序号") && v && IsDigit(v)
-						deepConfig.tableName := Number(v) - 1
+						deepRule.tableName := Number(v) - 1
 					else if (k = "表名称") && v
-						deepConfig.tableName := v
+						deepRule.tableName := v
 					else if (k = "起始行") && v && IsDigit(v)
-						deepConfig.startRow := Number(v)
+						deepRule.startRow := Number(v)
 					else if (k = "非空列") && v && IsDigit(v)
-						deepConfig.nonemptyColumn := Number(v)
+						deepRule.nonemptyColumn := Number(v)
 					else if (k = "中止检测列") && v && IsDigit(v) {
-						deepConfig.endCheckColumn := Number(v)
-						deepConfig.endCheckMaxCount := v2 && IsDigit(v2) ? Number(v2) : 0 ; 默认最大容忍次数为0
+						deepRule.endCheckColumn := Number(v)
+						deepRule.endCheckMaxCount := v2 && IsDigit(v2) ? Number(v2) : 0 ; 默认最大容忍次数为0
 					} else if p := RegExMatch(k, "(?<=\d),(?=\d)")    ; 匹配信息
-						deepConfig.match.push({row:SubStr(k, 1, p-1), column:SubStr(k, p+1), value:v})
+						deepRule.match.push({row:SubStr(k, 1, p-1), column:SubStr(k, p+1), value:v})
 					else if RegExMatch(k, "^\[.+]$") {              ; 字段信息
 						fieldName := SubStr(k, 2, -1)
-						fields := deepConfig.fields
+						fields := deepRule.fields
 						fieldsLength := fields.Length
 						if p := RegExMatch(v, "(?<=\d),(?=\d)") ; 固定单元格
 							fields.Push({name:fieldName, row:SubStr(v, 1, p-1), column:SubStr(v, p+1)})
@@ -172,12 +237,12 @@ Class FileUnion {
 					}
 				}
 				;补全必要参数
-				deepConfig.tableName := deepConfig.HasProp("tableName") ? deepConfig.tableName : 0
-				deepConfig.startRow := deepConfig.HasProp("startRow") ? deepConfig.startRow : 1
-				deepConfig.endCheckColumn := deepConfig.HasProp("endCheckColumn") ? deepConfig.endCheckColumn : 1
-				deepConfig.endCheckMaxCount := deepConfig.HasProp("endCheckMaxCount") ? deepConfig.endCheckMaxCount : 0
+				deepRule.tableName := deepRule.HasProp("tableName") ? deepRule.tableName : 0
+				deepRule.startRow := deepRule.HasProp("startRow") ? deepRule.startRow : 1
+				deepRule.endCheckColumn := deepRule.HasProp("endCheckColumn") ? deepRule.endCheckColumn : 1
+				deepRule.endCheckMaxCount := deepRule.HasProp("endCheckMaxCount") ? deepRule.endCheckMaxCount : 0
 			}
-			return this.deepConfigs
+			return this.deepRules
 		}
 	}
 
@@ -230,26 +295,26 @@ Class FileUnion {
 	 */
 	static UnionFiles() {
 		this.Data.Clear()
-		deepConfigs := this.Configs.activeConfig.ConvertToDeep()
+		deepRules := this.Configs.activeConfig.ConvertToDeep()
 		for i, file in this.files {
-			this.LoadExcel(file, deepConfigs)
+			this.LoadExcel(file, deepRules)
 		}
 	}
 
 	/**
 	 * 读取Excel文件,识别成功返回匹配的配置序号,失败返回0
 	 */
-	static LoadExcel(file, deepConfigs) {
+	static LoadExcel(file, deepRules) {
 		flieName := file.name ; 供参数调用
 		book := XL.Load(file.path)
-		for cfgI, deepConfig in deepConfigs {
+		for cfgI, deepRule in deepRules {
 			;尝试获取表
-			try sheet := book[deepConfig.tableName]
+			try sheet := book[deepRule.tableName]
 			catch
 				continue
 			;匹配信息确认
 			passMatch := true
-			for _, match in deepConfig.match {
+			for _, match in deepRule.match {
 				if !RegExMatch(sheet[match.row-1, match.column-1].value, "i)" match.value) {
 					passMatch := false
 					break
@@ -260,7 +325,7 @@ Class FileUnion {
 			;字段信息分类
 			fixedFields := Map()  ; 固定
 			loopedFields := Map() ; 循环
-			for _, field in deepConfig.fields {
+			for _, field in deepRule.fields {
 				; 判断是否包含字段名,不包含时新建
 				Index := this.Data.FieldIndex(field.name) || this.Data.AddField(field.name)
 				; 预处理配置              field.HasProp("FormatStr") 
@@ -278,17 +343,17 @@ Class FileUnion {
 					loopedFields[Index] := field
 			}
 			;循环获取各行数据
-			rowI := deepConfig.startRow - 1
+			rowI := deepRule.startRow - 1
 			endCheckCount := 0
 			Loop {
 				rowI++
 				;检查是否中止
-				if sheet[rowI, deepConfig.endCheckColumn-1].value = '' {
-					if ++endCheckCount > deepConfig.endCheckMaxCount
+				if sheet[rowI, deepRule.endCheckColumn-1].value = '' {
+					if ++endCheckCount > deepRule.endCheckMaxCount
 						break
 				}
 				;检查非空列状态
-				if deepConfig.HasProp("nonemptyColumn") and sheet[rowI-1, deepConfig.nonemptyColumn-1].value = ""
+				if deepRule.HasProp("nonemptyColumn") and sheet[rowI-1, deepRule.nonemptyColumn-1].value = ""
 					continue
 				;开始添加一条信息
 				row := []

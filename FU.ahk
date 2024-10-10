@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "v2.0.0"
+APP_VERSION   := "0.0.2"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -62,19 +62,11 @@ APP_INI := IniSaved(APP_DATA_PATH "\" APP_NAME "_config.ini")   ;创建系统配
 DirCreate DATA_PATH := A_ScriptDir "\" APP_NAME "_Data"         ;产生数据文件位置
 INI := IniSaved(DATA_PATH "\" APP_NAME "_config.ini")           ;创建配置ini类
 DirCreate CONFIG_PATH := DATA_PATH "\configs"                   ;配置文件路径
-FileUnion.Configs.WorkingDir := CONFIG_PATH
 
-FUconfig := FileUnion.Configs.Add(1) ; 临时
+;FUrule := FileUnion.Rules.Add(1) ; 临时
 
 ;全局参数
-G := {}
-
-
-;安装必要的文件
-#Include FU_InstallFiles.ahk
-if !DirInstallTo(DATA_PATH)    ;非覆盖安装
-	MsgBox "文件安装错误!"
-
+global G := {}
 
 ;修改系统短日期格式
 sShortDate := "yyyy-MM-dd"
@@ -88,7 +80,7 @@ if sShortDate != RegRead("HKEY_CURRENT_USER\Control Panel\International", "sShor
 
 ;创建主GUI
 MainGuiWidth := 1000, MainGuiHeight := 700
-MainGui := Gui("+Resize +MinSize" MainGuiWidth "x" MainGuiHeight , APP_NAME_CN " " APP_VERSION)   ;GUI可修改尺寸
+MainGui := Gui("+Resize +MinSize" MainGuiWidth "x" MainGuiHeight , APP_NAME_CN " v" APP_VERSION)   ;GUI可修改尺寸
 MainGui.Show("hide w" MainGuiWidth " h" MainGuiHeight)
 MainGui.MarginX := MainGui.MarginY := 0
 MainGui.SetFont("s9", "微软雅黑")
@@ -175,61 +167,146 @@ LV_LoadDir(force := false) {
 
 
 
+;Group 配置
+MainGui.SetFont("c9382C9 bold", "微软雅黑")
+L_GBsending := MainGui.Add("GroupBox", "x+7 ym+17 Section w225 h83", "配置")
+MainGui.SetFont("cDefault norm", "微软雅黑")
+
+;设置表格编号
+MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200", "当前配置")
+L_CBconfig := MainGui.Add("ComboBox", "x+0 yp w155")
+L_CBconfig.lastText := INI.Init(L_CBconfig, "L", "DDLconfig", "", "Text")
+L_CBconfig.OnEvent("Change", L_CBconfig_Change)
+L_CBconfig_Change(*) {
+	if FileUnion.Configs.Has(L_CBconfig.Text) {
+		G.ActiveConfig := FileUnion.Configs.Switch(L_CBconfig.Text)
+		SB.SetText("配置切换为: " L_CBconfig.Text)
+		EnabledConfigButtons(true)
+	} else {
+		G.ActiveConfig := ""
+		EnabledConfigButtons(false)
+	}
+	L_LVrule.SaveRule(L_CBconfig.lastText, L_DDLruleIndex.Value)
+	L_DDLruleIndex.lastValue := L_DDLruleIndex.Value := 1
+	L_LVrule.LoadRule()
+	L_CBconfig.lastText := L_CBconfig.Text
+}
+;控制按钮状态
+EnabledConfigButtons(configNameExists) {
+	L_BTAddConfig.Enabled := configNameExists ? false : true
+	L_BTRenameConfig.Enabled := L_BTCopyConfig.Enabled := L_BTDeleteConfig.Enabled := configNameExists ? true : false
+}
+;按钮-新建配置
+L_BTAddConfig := MainGui.Add("Button", "xs+9 y+4 w51 h26", "新建")
+L_BTAddConfig.OnEvent("Click", L_BTAddConfig_Click)
+L_BTAddConfig_Click(thisCtrl, Info) {
+	FileUnion.Configs.Add(L_CBconfig.Text)
+	L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.Text)
+	L_CBconfig_Change()
+}
+;按钮-重命名
+L_BTRenameConfig := MainGui.Add("Button", "x+1 yp wp hp", "重命名")
+L_BTRenameConfig.OnEvent("Click", L_BTRenameConfig_Click)
+L_BTRenameConfig_Click(thisCtrl, Info) {
+	MainGui.Opt("+OwnDialogs")
+	IB := InputBox("输入一个新的配置名称:", "配置重命名", "w250 h100", L_CBconfig.Text)
+	if IB.Result = "OK" &&  IB.Value != "" && IB.Value != L_CBconfig.Text {
+		if FileUnion.Configs.Has(IB.Value)
+			return SB.SetText('重命名失败: 配置"' IB.Value '"已存在')
+		if FileUnion.Configs.ReName(L_CBconfig.Text, IB.Value)
+			return SB.SetText('重命名失败: 配置文件"' IB.Value '"重命名失败')
+		L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.Text := IB.Value)
+		L_CBconfig_Change()
+	}
+}
+;按钮-复制配置
+L_BTCopyConfig := MainGui.Add("Button", "x+1 yp wp hp", "复制")
+L_BTCopyConfig.OnEvent("Click", L_BTCopyConfig_Click)
+L_BTCopyConfig_Click(thisCtrl, Info) {
+	MainGui.Opt("+OwnDialogs")
+	IB := InputBox("复制为新配置的名称:", "配置复制", "w250 h100", L_CBconfig.Text "_副本")
+	if IB.Result = "OK" &&  IB.Value != "" && IB.Value != L_CBconfig.Text {
+		if FileUnion.Configs.Has(IB.Value)
+			return SB.SetText('复制失败: 配置"' IB.Value '"已存在')
+		FileUnion.Configs.Clone(IB.Value, L_CBconfig.Text)
+		L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.Text := IB.Value)
+		L_CBconfig_Change()
+	}
+}
+;按钮-删除配置
+L_BTDeleteConfig := MainGui.Add("Button", "x+1 yp wp hp", "删除")
+L_BTDeleteConfig.OnEvent("Click", L_BTDeleteConfig_Click)
+L_BTDeleteConfig_Click(thisCtrl, Info) {
+	FileUnion.Configs.Delete(L_CBconfig.Text)
+	L_CBconfig.Update(FileUnion.Configs.instances)
+	L_CBconfig_Change()
+}
+
+
+
+
+
 ;Group 文件合并规则
 MainGui.SetFont("c9382C9 bold", "微软雅黑")
-L_GBsending := MainGui.Add("GroupBox", "x+7 ym+17 Section w225 h560 AH", "文件合并规则")
+L_GBsending := MainGui.Add("GroupBox", "xs y+10 Section w225 h480 AH", "文件合并规则")
 MainGui.SetFont("cDefault norm", "微软雅黑")
 
 ;设置表格编号
 MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200", "规则编号")
-L_DDLconfigIndex := MainGui.Add("DDL", "x+0 yp w65", [1,2,3,4,5,6,7,8,9,10])
-L_DDLconfigIndex.lastValue := L_DDLconfigIndex.Value := INI.Init(L_DDLconfigIndex, "L", "DDLconfigIndex", 1)
-L_DDLconfigIndex.OnEvent("Change", L_DDLconfigIndex_Change)
-L_DDLconfigIndex_Change(thisDDL, Info) {
-	L_LVconfig.SaveConfig(thisDDL.lastValue)
-	L_LVconfig.LoadConfig()
-	thisDDL.lastValue := thisDDL.Value
-}
+L_DDLruleIndex := MainGui.Add("DDL", "x+0 yp w65", [1,2,3,4,5,6,7,8,9,10])
+L_DDLruleIndex.lastValue := L_DDLruleIndex.Value := INI.Init(L_DDLruleIndex, "L", "DDLruleIndex", 1)
+L_DDLruleIndex.OnEvent("Change", (*) {
+	L_LVrule.SaveRule(, L_DDLruleIndex.lastValue)
+	L_LVrule.LoadRule()
+	L_DDLruleIndex.lastValue := L_DDLruleIndex.Value
+})
 ;按钮-模板
-L_BTdefaultConfig := MainGui.Add("Button", "x+10 yp w40 h25", "模板")
-L_BTdefaultConfig.OnEvent("Click", L_BTdefaultConfig_Click)
-L_BTdefaultConfig_Click(thisCtrl, Info) {
-	FUconfig[L_DDLconfigIndex.Value] := FUconfig.GetDefault()
-	L_LVconfig.LoadConfig()
+L_BTdefaultRule := MainGui.Add("Button", "x+10 yp w40 h25", "模板")
+L_BTdefaultRule.OnEvent("Click", L_BTdefaultRule_Click)
+L_BTdefaultRule_Click(thisCtrl, Info) {
+	if !G.ActiveConfig
+		return
+	G.ActiveConfig[L_DDLruleIndex.Value] := FileUnion.Configs.GetDefaultRule()
+	L_LVrule.LoadRule()
 }
 ;按钮-清空
-L_BTclearConfig := MainGui.Add("Button", "x+0 yp wp hp", "清空")
-L_BTclearConfig.OnEvent("Click", L_BTclearConfig_Click)
-L_BTclearConfig_Click(thisCtrl, Info) {
-	FUconfig[L_DDLconfigIndex.Value].Length := 0
-	L_LVconfig.LoadConfig()
+L_BTclearRule := MainGui.Add("Button", "x+0 yp wp hp", "清空")
+L_BTclearRule.OnEvent("Click", L_BTclearRule_Click)
+L_BTclearRule_Click(thisCtrl, Info) {
+	if !G.ActiveConfig
+		return
+	G.ActiveConfig[L_DDLruleIndex.Value].Length := 0
+	L_LVrule.LoadRule()
 }
 
 
 
 ;位置信息
-L_LVconfig := MainGui.Add("ListView", "xs+8 y+5 w207 h470 Grid -ReadOnly BackgroundFEFEFE AH", ["键","值","附加"])
-L_LVconfig.ModifyCol(1, 70)
-L_LVconfig.ModifyCol(2, 70)
-L_LVconfig.ModifyCol(3, 63)
-LVICE_XXS(L_LVconfig) ; 可编辑单元格
+L_LVrule := MainGui.Add("ListView", "xs+8 y+5 w207 h390 Grid -ReadOnly BackgroundFEFEFE AH", ["键","值","附加"])
+L_LVrule.ModifyCol(1, 70)
+L_LVrule.ModifyCol(2, 70)
+L_LVrule.ModifyCol(3, 63)
+LVICE_XXS(L_LVrule) ; 可编辑单元格
 ;点选项目触发动作
-L_LVconfig.OnEvent("Click", (thisLV, rowI) {
+L_LVrule.OnEvent("Click", (thisLV, rowI) {
 	SB.SetText(rowI ? (thisLV.GetText(rowI,1) "   " thisLV.GetText(rowI,2) "   " thisLV.GetText(rowI,3)) : "")
 })
-;从JSON文件加载参数到LV
-L_LVconfig.LoadConfig := (thisLV) {
-	i := L_DDLconfigIndex.Value
+;从FileUnion.Configs加载参数到LV
+L_LVrule.LoadRule := (thisLV) {
 	thisLV.Delete()
-	for i, arr in FUconfig[i]
+	if !G.ActiveConfig
+		return
+	for _, arr in G.ActiveConfig[L_DDLruleIndex.Value]
 		thisLV.Add(, arr[1], arr[2], arr[3])
 }
-;保存LV参数到JSON文件
-L_LVconfig.SaveConfig := (thisLV, i?) {
-	UnionConfig := FUconfig[i ?? L_DDLconfigIndex.Value]
-	UnionConfig.length := 0
+;保存LV参数到FileUnion.Configs
+L_LVrule.SaveRule := (thisLV, name?, i?) {
+	if !FileUnion.Configs.Has(name ?? L_CBconfig.Text)
+		return
+	rule := FileUnion.Configs[name ?? L_CBconfig.Text][i ?? L_DDLruleIndex.Value]
+	rule.length := 0
 	Loop thisLV.GetCount()
-		UnionConfig.push([thisLV.GetText(A_Index,1), thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
+		rule.push([thisLV.GetText(A_Index,1), thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
 }
 
 
@@ -237,12 +314,12 @@ L_LVconfig.SaveConfig := (thisLV, i?) {
 L_BTaddKey := MainGui.Add("Button", "xs+8 y+1 w103 h30 AY", "添加参数")
 L_BTaddKey.OnEvent("Click", L_BTaddKey_Click)
 L_BTaddKey_Click(thisCtrl, Info) {
-	RowNumber := L_LVconfig.GetNext(0) || L_LVconfig.GetCount() + 1 ; 优先插入到选中行下方，否则插入到最后一行
-	RowNumber := L_LVconfig.Insert(RowNumber,, "key" RowNumber, "value" RowNumber)
-	L_LVconfig.Focus()
-	L_LVconfig.Modify(0, "-Select")          ;全部取消选中
-	L_LVconfig.Modify(RowNumber, "Select")   ;选中
-	L_LVconfig.Modify(RowNumber, "Vis")      ;可见
+	RowNumber := L_LVrule.GetNext(0) || L_LVrule.GetCount() + 1 ; 优先插入到选中行下方，否则插入到最后一行
+	RowNumber := L_LVrule.Insert(RowNumber,, "key" RowNumber, "value" RowNumber)
+	L_LVrule.Focus()
+	L_LVrule.Modify(0, "-Select")          ;全部取消选中
+	L_LVrule.Modify(RowNumber, "Select")   ;选中
+	L_LVrule.Modify(RowNumber, "Vis")      ;可见
 }
 ;删除按钮
 L_BTdeleteKey := MainGui.Add("Button", "x+1 yp wp hp AYP", "删除参数")
@@ -251,13 +328,13 @@ L_BTdeleteKey_Click(thisCtrl, Info) {
 	selectRows := []
 	RowNumber := 0  ; 这样使得首次循环从列表的顶部开始搜索.
 	Loop {
-		RowNumber := L_LVconfig.GetNext(RowNumber)  ; 在前一次找到的位置后继续搜索.
+		RowNumber := L_LVrule.GetNext(RowNumber)  ; 在前一次找到的位置后继续搜索.
 		if not RowNumber  ; 上面返回零, 所以选择的行已经都找到了.
 			break
 		selectRows.Push(RowNumber)
 	}
 	for _, RowNumber in selectRows.Reverse()
-		L_LVconfig.Delete(RowNumber)
+		L_LVrule.Delete(RowNumber)
 }
 
 
@@ -265,18 +342,19 @@ L_BTdeleteKey_Click(thisCtrl, Info) {
 ;进度条窗口
 ProgGui := ProgressGui(MainGui) 
 ;提取文件内容
-L_BTUnion := MainGui.Add("Button", "xs y+13 w225 h84 AYP", "提取内容 >>>>")
+L_BTUnion := MainGui.Add("Button", "xs y+13 w225 h78 AYP", "提取内容 >>>>")
 L_BTUnion.OnEvent("Click", L_BTUnion_Click)
 L_BTUnion_Click(thisCtrl, Info) {
 	MainGui.Opt("+Disabled")
 
-	L_LVconfig.SaveConfig()
+	L_LVrule.SaveRule()
 	FileUnion.Data.Clear()
-	deepConfigs := FUconfig.ConvertToDeep()
+	;deepRules := FUrule.ConvertToDeep()
+	deepRules := ""
 	ProgGui.Start(FileUnion.files.Length)
 	for i, file in FileUnion.files {
 		ProgGui.StepStart(file.name)
-		try result := FileUnion.LoadExcel(file, deepConfigs)
+		try result := FileUnion.LoadExcel(file, deepRules)
 		catch
 		    ProgGui.StepFinsih(0, "文件提取失败")
 		else {
@@ -429,10 +507,10 @@ MainGui.OnEvent("Close", (*) => ExitApp())
 OnExit (*) {
 	MainGui.Hide()
 
-	APP_INI.SaveAll()               ; 用户配置保存到ini文件
-	INI.SaveAll()                   ; 用户配置保存到ini文件
-	L_LVconfig.SaveConfig()         ; 保存当前界面的LV
-	FUconfig.SaveToFile()           ; 保存配置信息到JSON
+	APP_INI.SaveAll()                   ; 用户配置保存到ini文件
+	INI.SaveAll()                       ; 用户配置保存到ini文件
+	L_LVrule.SaveRule()                 ; 保存当前界面的LV
+	FileUnion.Configs.SaveAllToFiles()  ; 向JSON文件中写入各个配置
 
 	;清空缓存文件夹
 	DirDelete APP_DATA_CACHE_PATH, 1
@@ -444,10 +522,19 @@ OnExit (*) {
 MainGui.Init := (thisGui) {
 	thisGui.Opt("+Disabled")
 
-	if FUconfig.LoadFromFile()
-		SB.SetText("JSON文件读取失败,使用空配置")
-	L_LVconfig.LoadConfig()
-
+	;加载全部配置文件
+	FileUnion.Configs.LoadAllFromFiles(CONFIG_PATH)
+	;刷新配置DDL               
+	L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.lastText)
+	if L_CBconfig.Value { 
+		G.ActiveConfig := FileUnion.Configs.Switch(L_CBconfig.Text)
+		L_LVrule.LoadRule()
+		EnabledConfigButtons(true)
+	} else {
+		G.ActiveConfig := ""
+		SB.SetText("未找到配置,请新建配置")
+		EnabledConfigButtons(false)
+	}
 	thisGui.Opt("-Disabled")
 }
 MainGui.Init()

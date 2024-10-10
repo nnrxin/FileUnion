@@ -11,6 +11,7 @@
 #Include GUI\Gui_Resizer.ahk ; Gui尺寸调整
 #Include GUI\Gui_StatusBar.ahk ; 状态栏增强
 #Include GUI\Gui_DDL.ahk ; 下拉框增强
+#Include GUI\Gui_ComboBox.ahk ; 组合框增强
 #Include GUI\Gui_ListView.ahk ; 图标视图增强
 #Include GUI\Gui_Edit.ahk ; 编辑框增强
 #Include GUI\Class_LVICE_XXS.ahk ; LV单元格内编辑
