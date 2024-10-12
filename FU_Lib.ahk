@@ -353,7 +353,7 @@ Class FileUnion {
 						break
 				}
 				;检查非空列状态
-				if deepRule.HasProp("nonemptyColumn") and sheet[rowI-1, deepRule.nonemptyColumn-1].value = ""
+				if deepRule.HasProp("nonemptyColumn") and Trim(sheet[rowI-1, deepRule.nonemptyColumn-1].value, ' `t`r`n') = ""
 					continue
 				;开始添加一条信息
 				row := []

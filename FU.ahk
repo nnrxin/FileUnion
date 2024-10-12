@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.0.2"
+APP_VERSION   := "0.0.3"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -342,15 +342,15 @@ L_BTdeleteKey_Click(thisCtrl, Info) {
 ;进度条窗口
 ProgGui := ProgressGui(MainGui) 
 ;提取文件内容
-L_BTUnion := MainGui.Add("Button", "xs y+13 w225 h78 AYP", "提取内容 >>>>")
+L_BTUnion := MainGui.Add("Button", "xs y+13 w225 h78 AYP", "提取内容 >>")
 L_BTUnion.OnEvent("Click", L_BTUnion_Click)
 L_BTUnion_Click(thisCtrl, Info) {
 	MainGui.Opt("+Disabled")
 
+	SB.SetText("开始提取文件内容", 2)
 	L_LVrule.SaveRule()
 	FileUnion.Data.Clear()
-	;deepRules := FUrule.ConvertToDeep()
-	deepRules := ""
+	deepRules := G.ActiveConfig.ConvertToDeep()
 	ProgGui.Start(FileUnion.files.Length)
 	for i, file in FileUnion.files {
 		ProgGui.StepStart(file.name)
@@ -367,6 +367,7 @@ L_BTUnion_Click(thisCtrl, Info) {
 	R_LVresult.LoadRecordset()
 	R_LVresult.AdjustColumnsWidth()
 	ProgGui.Finsih()
+	SB.SetText("总 " R_LVresult.GetCount() " 行", 2)
 
 	MainGui.Opt("-Disabled")
 }
@@ -498,6 +499,7 @@ MainGui.OnEvent("DropFiles", (GuiObj, GuiCtrlObj, FileArray, X, Y) {
 
 ;改变GUI尺寸时调整控件
 MainGui.OnEvent("Size", (thisGui, MinMax, W, H) {
+	R_LVresult.AdjustColumnsWidth()
 })
 
 ;GUI关闭
@@ -522,9 +524,18 @@ OnExit (*) {
 MainGui.Init := (thisGui) {
 	thisGui.Opt("+Disabled")
 
+	;拖拽文件夹启动
+	for i, path in Path_InArgs() {    ;拖拽文件到程序图标上启动
+		if DirExist(path) {
+			L_EDpath.Value := path
+			MainGui.Tips.SetTip(L_EDpath, L_EDpath.Value)
+			LV_LoadDir(true)
+			break
+		}
+	}
 	;加载全部配置文件
 	FileUnion.Configs.LoadAllFromFiles(CONFIG_PATH)
-	;刷新配置DDL               
+	;刷新配置CB               
 	L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.lastText)
 	if L_CBconfig.Value { 
 		G.ActiveConfig := FileUnion.Configs.Switch(L_CBconfig.Text)
@@ -542,14 +553,13 @@ MainGui.Init()
 
 ;GUI显示
 dpiRate := 96 / A_ScreenDPI
-guiSizeRate := 0.8 * dpiRate
-MainGui.Show("Center w" SysGet(16) * guiSizeRate " h" SysGet(17) * guiSizeRate)
-
+MainGui.Show("hide Center w" SysGet(16) * dpiRate " h" SysGet(17) * dpiRate)
+guiSizeRate := 0.9 * dpiRate
+MainGui.Show("Maximize Center w" SysGet(16) * guiSizeRate " h" SysGet(17) * guiSizeRate)
 /*
 dpiRate := 96 / A_ScreenDPI
-MainGui.Show("hide Center w" SysGet(16) * dpiRate " h" SysGet(17) * dpiRate)
-guiSizeRate := 0.8 * dpiRate
-MainGui.Show("Maximize Center w" SysGet(16) * guiSizeRate " h" SysGet(17) * guiSizeRate)
+guiSizeRate := 0.9 * dpiRate
+MainGui.Show("Center w" SysGet(16) * guiSizeRate " h" SysGet(17) * guiSizeRate)
 */
 
 ;=========================
