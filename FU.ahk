@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.0.3"
+APP_VERSION   := "0.0.4"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -354,10 +354,13 @@ L_BTUnion_Click(thisCtrl, Info) {
 	ProgGui.Start(FileUnion.files.Length)
 	for i, file in FileUnion.files {
 		ProgGui.StepStart(file.name)
-		try result := FileUnion.LoadExcel(file, deepRules)
-		catch
+		result := (file.type = "excel") ? FileUnion.LoadExcel(file, deepRules) : FileUnion.LoadWord(file, deepRules)
+		try {
+			result := result
+			;result := (file.type = "excel") ? FileUnion.LoadExcel(file, deepRules) : FileUnion.LoadWord(file, deepRules)
+		} catch {
 		    ProgGui.StepFinsih(0, "文件提取失败")
-		else {
+		} else {
 			if result
 				ProgGui.StepFinsih(1, "文件提取成功-" result)
 			else

@@ -11,6 +11,13 @@ DllCall('LoadLibrary', 'str', AHK_DATA_DIR_PATH '\XL\' (A_PtrSize * 8) 'bit\libx
 
 Class FileUnion {
 
+	; 释放com对象
+	static __Delete() {
+		try this.WordApp.Quit()
+	}
+
+
+
 	/**
 	 * 获取文件列表
 	 */
@@ -22,7 +29,7 @@ Class FileUnion {
 			return this.files
 		lastpath := dirPath
 		;相关参数
-		static exts := ["xls","xlsx"]
+		static exts := ["xls","xlsx","doc","docx"]
 		static ignorefileNames := Map("Thumbs.db",true, "thumbs.db",true) ; 忽略的文件名称
 		;开始加载
 		this.files.Length := 0
@@ -35,7 +42,8 @@ Class FileUnion {
 			or A_LoopFileSizeKB < limitFileSizeKB
 				continue
 			existsFileName[A_LoopFileName "|" A_LoopFileTimeModified] := true
-			this.files.Push({path: A_LoopFileFullPath, name: A_LoopFileName})
+			fileType := RegExMatch(A_LoopFileExt, "i)^xlsx?") ? "excel" : "word"
+			this.files.Push({path: A_LoopFileFullPath, name: A_LoopFileName, type: fileType})
 		}
 		return this.files
 	}
@@ -58,7 +66,7 @@ Class FileUnion {
 			["3,8"        , "(检验员|QC|inscpetor)"      , ""      ],
 			["起始行"     , "4"                          , ""      ],
 			["非空列"     , "7"                          , ""      ],
-			["中止检测列" , "1"                          , "0"     ],
+			["中止检测列" , "1"                          , "5"     ],
 			["[文件名]"   , "%flieName%"                 , ""      ],
 			["[日期]"     , "2,2"                        , "{:d}"  ],
 			["[船号]"     , "2"                          , ""      ],
@@ -67,7 +75,6 @@ Class FileUnion {
 			["[检验项目]" , "7"                          , ""      ],
 			["[检验员]"   , "8"                          , ""      ],
 		]
-
 
 		; 实例管理
 		static instances := Map() ; 实例集合
@@ -209,8 +216,8 @@ Class FileUnion {
 					k := arr[1], v := arr[2], v2 := arr[3]
 					if !k && !v
 						continue
-					else if (k = "表序号") && v && IsDigit(v)
-						deepRule.tableName := Number(v) - 1
+					else if (k = "表序号") && v && IsDigit(v) && v > 0
+						deepRule.tableName := Number(v)
 					else if (k = "表名称") && v
 						deepRule.tableName := v
 					else if (k = "起始行") && v && IsDigit(v)
@@ -237,7 +244,7 @@ Class FileUnion {
 					}
 				}
 				;补全必要参数
-				deepRule.tableName := deepRule.HasProp("tableName") ? deepRule.tableName : 0
+				deepRule.tableName := deepRule.HasProp("tableName") ? deepRule.tableName : 1
 				deepRule.startRow := deepRule.HasProp("startRow") ? deepRule.startRow : 1
 				deepRule.endCheckColumn := deepRule.HasProp("endCheckColumn") ? deepRule.endCheckColumn : 1
 				deepRule.endCheckMaxCount := deepRule.HasProp("endCheckMaxCount") ? deepRule.endCheckMaxCount : 0
@@ -297,7 +304,10 @@ Class FileUnion {
 		this.Data.Clear()
 		deepRules := this.Configs.activeConfig.ConvertToDeep()
 		for i, file in this.files {
-			this.LoadExcel(file, deepRules)
+			if (file.type = "excel")
+			    this.LoadExcel(file, deepRules)
+			else
+				this.LoadWord(file, deepRules)
 		}
 	}
 
@@ -309,7 +319,7 @@ Class FileUnion {
 		book := XL.Load(file.path)
 		for cfgI, deepRule in deepRules {
 			;尝试获取表
-			try sheet := book[deepRule.tableName]
+			try sheet := book[IsInteger(deepRule.tableName) ? deepRule.tableName - 1 : deepRule.tableName] ; 数字则-1
 			catch
 				continue
 			;匹配信息确认
@@ -348,7 +358,7 @@ Class FileUnion {
 			Loop {
 				rowI++
 				;检查是否中止
-				if sheet[rowI, deepRule.endCheckColumn-1].value = '' {
+				if sheet[rowI-1, deepRule.endCheckColumn-1].value = '' {
 					if ++endCheckCount > deepRule.endCheckMaxCount
 						break
 				}
@@ -372,6 +382,88 @@ Class FileUnion {
 			break
 		}
 	    book := ''
+		return matched ?? 0
+	}
+
+	/**
+	 * 读取Word文件,识别成功返回匹配的配置序号,失败返回0
+	 * 说明: Range.Text 最后两位分别是ASCII 13和ASCII 7
+	 */
+	static LoadWord(file, deepRules) {
+		if !this.HasProp("WordApp") {
+			this.WordApp := ComObject("Word.application")
+			this.WordApp.Visible := False  ; 不可见
+			this.WordApp.DisplayAlerts := 0 ; 警告和消息的处理的方式(不显示任何警告或消息框)
+		}
+		flieName := file.name ; 供参数调用
+		document := this.WordApp.documents.Open(file.path,, true) ; 只读打开
+
+		for cfgI, deepRule in deepRules {
+			;尝试获取表
+			try table := document.Tables.Item(IsInteger(deepRule.tableName) ? deepRule.tableName : 1) ; 非整数则转化为数字1
+			catch
+				continue
+			;匹配信息确认
+			passMatch := true
+			for _, match in deepRule.match {
+				if !RegExMatch(SubStr(table.Cell(match.row, match.column).Range.Text,1,-2), "i)" match.value) {
+					passMatch := false
+					break
+				}
+			}
+			if !passMatch
+				continue
+			;字段信息分类
+			fixedFields := Map()  ; 固定
+			loopedFields := Map() ; 循环
+			for _, field in deepRule.fields {
+				; 判断是否包含字段名,不包含时新建
+				Index := this.Data.FieldIndex(field.name) || this.Data.AddField(field.name)
+				; 预处理配置              field.HasProp("FormatStr") 
+				if field.HasProp("variable") {
+					if !IsSet(v := %(field.variable)%) 
+						continue
+					try fixedFields[Index] := Format(field.FormatStr, v)
+					catch 
+						fixedFields[Index] := v
+				} else if field.HasProp("row") {
+					try fixedFields[Index] := Format(field.FormatStr, SubStr(table.Cell(field.row, field.column).Range.Text,1,-2))
+					catch
+						fixedFields[Index] := SubStr(table.Cell(field.row, field.column).Range.Text,1,-2)
+				} else
+					loopedFields[Index] := field
+			}
+			;循环获取各行数据
+			rowI := deepRule.startRow - 1
+			endCheckCount := 0
+			Loop table.Rows.Count - rowI {
+				rowI++
+				;检查是否中止
+				if SubStr(table.Cell(rowI,deepRule.endCheckColumn).Range.Text,1,-2) = '' {
+					if ++endCheckCount > deepRule.endCheckMaxCount
+						break
+				}
+				;检查非空列状态
+				if deepRule.HasProp("nonemptyColumn") and Trim(SubStr(table.Cell(rowI,deepRule.nonemptyColumn).Range.Text,1,-2), ' `t`r`n') = ""
+					continue
+				;开始添加一条信息
+				row := []
+				row.Length := this.Data.ColumnCount()
+				for Index, value in fixedFields ; 固定
+					row[Index] := value
+				for Index, field in loopedFields {  ; 循环
+					try row[Index] := Format(field.FormatStr, SubStr(table.Cell(rowI,field.column).Range.Text,1,-2))
+					catch
+						row[Index] := SubStr(table.Cell(rowI,field.column).Range.Text,1,-2)
+				}
+				this.Data.Add(row*)
+			}
+			;跳过其他配置
+			matched := cfgI
+			break
+		}
+	    document.Close()
+		document := ''
 		return matched ?? 0
 	}
 
