@@ -13,9 +13,9 @@ Class FileUnion {
 
 	; 释放com对象
 	static __Delete() {
-		try this.WordApp.Quit()
+		if this.HasProp("WordApp")
+			this.WordApp.Quit()
 	}
-
 
 
 	/**
