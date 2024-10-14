@@ -63,7 +63,6 @@ DirCreate DATA_PATH := A_ScriptDir "\" APP_NAME "_Data"         ;产生数据文
 INI := IniSaved(DATA_PATH "\" APP_NAME "_config.ini")           ;创建配置ini类
 DirCreate CONFIG_PATH := DATA_PATH "\configs"                   ;配置文件路径
 
-;FUrule := FileUnion.Rules.Add(1) ; 临时
 
 ;全局参数
 global G := {}
@@ -182,9 +181,13 @@ L_CBconfig_Change(*) {
 		G.ActiveConfig := FileUnion.Configs.Switch(L_CBconfig.Text)
 		SB.SetText("配置切换为: " L_CBconfig.Text)
 		EnabledConfigButtons(true)
+		EnabledGroupBoxRule(true)
 	} else {
 		G.ActiveConfig := ""
 		EnabledConfigButtons(false)
+		EnabledGroupBoxRule(false)
+		if L_CBconfig.Text = ""
+			L_BTAddConfig.Enabled := false
 	}
 	L_LVrule.SaveRule(L_CBconfig.lastText, L_DDLruleIndex.Value)
 	L_DDLruleIndex.lastValue := L_DDLruleIndex.Value := 1
@@ -203,6 +206,7 @@ L_BTAddConfig_Click(thisCtrl, Info) {
 	FileUnion.Configs.Add(L_CBconfig.Text)
 	L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.Text)
 	L_CBconfig_Change()
+	SB.SetText("新建配置: " L_CBconfig.Text)
 }
 ;按钮-重命名
 L_BTRenameConfig := MainGui.Add("Button", "x+1 yp wp hp", "重命名")
@@ -217,6 +221,7 @@ L_BTRenameConfig_Click(thisCtrl, Info) {
 			return SB.SetText('重命名失败: 配置文件"' IB.Value '"重命名失败')
 		L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.Text := IB.Value)
 		L_CBconfig_Change()
+		SB.SetText("配置重命名为: " L_CBconfig.Text)
 	}
 }
 ;按钮-复制配置
@@ -231,15 +236,17 @@ L_BTCopyConfig_Click(thisCtrl, Info) {
 		FileUnion.Configs.Clone(IB.Value, L_CBconfig.Text)
 		L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.Text := IB.Value)
 		L_CBconfig_Change()
+		SB.SetText("配置复制为: " L_CBconfig.Text)
 	}
 }
 ;按钮-删除配置
 L_BTDeleteConfig := MainGui.Add("Button", "x+1 yp wp hp", "删除")
 L_BTDeleteConfig.OnEvent("Click", L_BTDeleteConfig_Click)
 L_BTDeleteConfig_Click(thisCtrl, Info) {
-	FileUnion.Configs.Delete(L_CBconfig.Text)
+	FileUnion.Configs.Delete(OldText := L_CBconfig.Text)
 	L_CBconfig.Update(FileUnion.Configs.instances)
 	L_CBconfig_Change()
+	SB.SetText("配置已删除: " OldText)
 }
 
 
@@ -279,14 +286,15 @@ L_BTclearRule_Click(thisCtrl, Info) {
 	L_LVrule.LoadRule()
 }
 
-
-
 ;位置信息
 L_LVrule := MainGui.Add("ListView", "xs+8 y+5 w207 h390 Grid -ReadOnly BackgroundFEFEFE AH", ["键","值","附加"])
 L_LVrule.ModifyCol(1, 70)
 L_LVrule.ModifyCol(2, 70)
 L_LVrule.ModifyCol(3, 63)
-LVICE_XXS(L_LVrule) ; 可编辑单元格
+;LV单元格可编辑,编辑后执行函数
+LV_InCellEditing(L_LVrule, (thisLV, Row, Col, OldText, NewText) {
+	;有变化则进行动作
+})
 ;点选项目触发动作
 L_LVrule.OnEvent("Click", (thisLV, rowI) {
 	SB.SetText(rowI ? (thisLV.GetText(rowI,1) "   " thisLV.GetText(rowI,2) "   " thisLV.GetText(rowI,3)) : "")
@@ -308,7 +316,6 @@ L_LVrule.SaveRule := (thisLV, name?, i?) {
 	Loop thisLV.GetCount()
 		rule.push([thisLV.GetText(A_Index,1), thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
 }
-
 
 ;添加按钮
 L_BTaddKey := MainGui.Add("Button", "xs+8 y+1 w103 h30 AY", "添加参数")
@@ -335,6 +342,11 @@ L_BTdeleteKey_Click(thisCtrl, Info) {
 	}
 	for _, RowNumber in selectRows.Reverse()
 		L_LVrule.Delete(RowNumber)
+}
+
+;控制文件合并规则控件状态
+EnabledGroupBoxRule(s) {
+	L_BTUnion.Enabled := L_DDLruleIndex.Enabled := L_BTdefaultRule.Enabled := L_BTclearRule.Enabled := L_LVrule.Enabled := L_BTaddKey.Enabled := L_BTdeleteKey.Enabled := s ? true : false
 }
 
 
@@ -544,10 +556,14 @@ MainGui.Init := (thisGui) {
 		G.ActiveConfig := FileUnion.Configs.Switch(L_CBconfig.Text)
 		L_LVrule.LoadRule()
 		EnabledConfigButtons(true)
+		EnabledGroupBoxRule(true)
 	} else {
 		G.ActiveConfig := ""
 		SB.SetText("未找到配置,请新建配置")
 		EnabledConfigButtons(false)
+		EnabledGroupBoxRule(false)
+		if L_CBconfig.Text = ""
+			L_BTAddConfig.Enabled := false
 	}
 	thisGui.Opt("-Disabled")
 }

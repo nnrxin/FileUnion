@@ -15,6 +15,7 @@
 #Include GUI\Gui_ListView.ahk ; 图标视图增强
 #Include GUI\Gui_Edit.ahk ; 编辑框增强
 #Include GUI\Class_LVICE_XXS.ahk ; LV单元格内编辑
+#Include GUI\Class_LV_InCellEditing.ahk ; LV单元格内编辑改进版
 #Include GUI\Class_LV_Colors.ahk ; LV单元格颜色
 #Include GUI\ProgressInStatusBar.ahk ; LV状态栏进度条
 
