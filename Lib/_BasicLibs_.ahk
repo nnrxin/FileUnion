@@ -21,6 +21,7 @@
 
 ;标记语言
 #Include Markups\Class_IniSaved.ahk ; ini简单存储类
+#Include Markups\JsonConfigFile.ahk ; json配置文件类
 
 ;字符串相关
 #Include String\StringFuctions.ahk ; 字符串增强函数集合

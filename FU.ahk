@@ -54,14 +54,20 @@ APP_VERSION   := "0.0.4"
 
 
 ;APP保存信息(存储在AppData)
-APP_DATA_PATH := A_AppData "\" APP_NAME_FULL                    ;在系统AppData的保存位置
-APP_DATA_CACHE_PATH := APP_DATA_PATH "\cache"                   ;缓存文件路径
-DirCreate APP_DATA_CACHE_PATH                                   ;路径不存在时需要新建
-APP_INI := IniSaved(APP_DATA_PATH "\" APP_NAME "_config.ini")   ;创建系统配置ini类
+APP_DATA_PATH := A_AppData "\" APP_NAME_FULL                          ;在系统AppData的保存位置
+APP_DATA_CACHE_PATH := APP_DATA_PATH "\cache"                         ;缓存文件路径
+DirCreate APP_DATA_CACHE_PATH                                         ;路径不存在时需要新建
+APP_JSON := JsonConfigFile(APP_DATA_PATH "\" APP_NAME "_config.json") ;创建放在用户数据文件夹配置json类
 ;APP保存信息(存储在本地文件夹APP_NAME "_Data"内)
-DirCreate DATA_PATH := A_ScriptDir "\" APP_NAME "_Data"         ;产生数据文件位置
-INI := IniSaved(DATA_PATH "\" APP_NAME "_config.ini")           ;创建配置ini类
-DirCreate CONFIG_PATH := DATA_PATH "\configs"                   ;配置文件路径
+DirCreate DATA_PATH := A_ScriptDir "\" APP_NAME "_Data"               ;产生数据文件位置
+LOCAL_JSON := JsonConfigFile(DATA_PATH "\" APP_NAME "_config.json")   ;创建放在本地文件夹配置json类
+DirCreate CONFIG_PATH := DATA_PATH "\configs"                         ;配置文件路径
+
+
+;安装本地文件
+#Include DirInstallTo_LOCAL.ahk
+if !DirInstallTo_LOCAL(DATA_PATH)    ;非覆盖安装
+	MsgBox "本地文件安装错误!"
 
 
 ;全局参数
@@ -107,7 +113,7 @@ MainGui.SetFont("cDefault norm", "微软雅黑")
 
 ;设置忽略文重复件名
 L_CBFliesNoRepeat := MainGui.Add("CheckBox", "xs+10 ys+17 w210 h25", "忽略完全相同的文件")
-L_CBFliesNoRepeat.Value := INI.Init(L_CBFliesNoRepeat, "L", "CBFliesNoRepeat", "1")
+L_CBFliesNoRepeat.Value := LOCAL_JSON.Init("L_CBFliesNoRepeat.Value", "1")
 L_CBFliesNoRepeat.ToolTip := "勾选后会忽略文件名和修改日期完全相同的文件"
 L_CBFliesNoRepeat.OnEvent("Click", L_CBFliesNoRepeat_Click)
 L_CBFliesNoRepeat_Click(thisCtrl, Info) {
@@ -118,7 +124,7 @@ L_CBFliesNoRepeat_Click(thisCtrl, Info) {
 
 ;设置忽略文件大小小于XX的附件
 L_CBLimitFileSizeKB := MainGui.Add("CheckBox", "xp y+0 w140 h25", "忽略文件尺寸(KB)小于")
-L_CBLimitFileSizeKB.Value := INI.Init(L_CBLimitFileSizeKB, "L", "CBLimitFileSizeKB", "1")
+L_CBLimitFileSizeKB.Value := LOCAL_JSON.Init("L_CBLimitFileSizeKB.Value", "1")
 L_CBLimitFileSizeKB.OnEvent("Click", L_CBLimitFileSizeKB_Click)
 L_CBLimitFileSizeKB_Click(thisCtrl, Info) {
 	MainGui.Opt("+Disabled")
@@ -127,7 +133,7 @@ L_CBLimitFileSizeKB_Click(thisCtrl, Info) {
 	MainGui.Opt("-Disabled")
 }
 L_EDLimitFileSizeKB := MainGui.Add("Edit", "x+0 yp w65 h25 Center Number Limit6")
-L_EDLimitFileSizeKB.Value := INI.Init(L_EDLimitFileSizeKB, "L", "EDLimitFileSizeKB", "1")
+L_EDLimitFileSizeKB.Value := LOCAL_JSON.Init("L_EDLimitFileSizeKB.Value", "1")
 L_EDLimitFileSizeKB.OnEvent("Change", L_EDLimitFileSizeKB_Change)
 L_EDLimitFileSizeKB_Change(thisCtrl, Info) {
 	MainGui.Opt("+Disabled")
@@ -174,7 +180,7 @@ MainGui.SetFont("cDefault norm", "微软雅黑")
 ;设置表格编号
 MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200", "当前配置")
 L_CBconfig := MainGui.Add("ComboBox", "x+0 yp w155")
-L_CBconfig.lastText := INI.Init(L_CBconfig, "L", "DDLconfig", "", "Text")
+L_CBconfig.lastText := LOCAL_JSON.Init("L_CBconfig.Text", "")
 L_CBconfig.OnEvent("Change", L_CBconfig_Change)
 L_CBconfig_Change(*) {
 	if FileUnion.Configs.Has(L_CBconfig.Text) {
@@ -261,7 +267,7 @@ MainGui.SetFont("cDefault norm", "微软雅黑")
 ;设置表格编号
 MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200", "规则编号")
 L_DDLruleIndex := MainGui.Add("DDL", "x+0 yp w65", [1,2,3,4,5,6,7,8,9,10])
-L_DDLruleIndex.lastValue := L_DDLruleIndex.Value := INI.Init(L_DDLruleIndex, "L", "DDLruleIndex", 1)
+L_DDLruleIndex.lastValue := L_DDLruleIndex.Value := LOCAL_JSON.Init("L_DDLruleIndex.Value", 1)
 L_DDLruleIndex.OnEvent("Change", (*) {
 	L_LVrule.SaveRule(, L_DDLruleIndex.lastValue)
 	L_LVrule.LoadRule()
@@ -423,7 +429,7 @@ MainGui.SetFont("cDefault norm", "微软雅黑")
 
 MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200 AXP", "文件路径")
 R_EDpath := MainGui.Add("Edit", "x+0 yp w130 h25 AXP")
-R_EDpath.Value := INI.Init(R_EDpath, "R", "EDpath")
+R_EDpath.Value := LOCAL_JSON.Init("R_EDpath.Value", "")
 R_BTdir := MainGui.Add("button", "x+0 yp w25 h25 AXP", "...")
 R_BTdir.OnEvent("Click", (*) {
 	MainGui.Opt("+OwnDialogs")    ;对话框出现时禁止操作主GUI
@@ -434,11 +440,14 @@ R_BTdir.OnEvent("Click", (*) {
 
 MainGui.Add("Text", "xs+10 y+5 w50 h25 +0x200 AXP", "文件名称")
 R_EDfileName := MainGui.Add("Edit", "x+0 yp w155 h25 AXP")
-R_EDfileName.Value := INI.Init(R_EDfileName, "R", "EDfileName", "FUexport")
+R_EDfileName.Value := LOCAL_JSON.Init("R_EDfileName.Value", "FUexport")
 
 MainGui.Add("Text", "xs+10 y+5 w50 h25 +0x200 AXP", "文件类型")
 R_DDLfileExt := MainGui.Add("DDL", "x+0 yp w155 AXP", ["xlsx","xls","accdb"])
-R_DDLfileExt.Value := INI.Init(R_DDLfileExt, "R", "DDLfileExt", 1)
+R_DDLfileExt.Value := LOCAL_JSON.Init("R_DDLfileExt.Value", 1)
+
+R_CBaddTimestamp:= MainGui.Add("CheckBox", "xs+10 y+5 w200 h25 AXP", "生成的文件名后增加时间戳")
+R_CBaddTimestamp.Value := LOCAL_JSON.Init("R_CBaddTimestamp.Value", 1)
 
 ;导出为Excel
 R_BTexport := MainGui.Add("Button", "xs+7 y+5 w210 h50 AXP", "导出为文件")
@@ -446,7 +455,8 @@ R_BTexport.OnEvent("Click", R_BTexport_Click)
 R_BTexport_Click(thisCtrl, Info) {
 	MainGui.Opt("+Disabled")
 
-	path := Path_Full((R_EDpath.Value && DirExist(R_EDpath.Value) ? R_EDpath.Value : A_ScriptDir) "\" R_EDfileName.Value "-" A_Now "." R_DDLfileExt.Text)
+	fileName := (R_CBaddTimestamp.Value ? R_EDfileName.Value "-" A_Now : R_EDfileName.Value) "." R_DDLfileExt.Text
+	path := Path_Full((R_EDpath.Value && DirExist(R_EDpath.Value) ? R_EDpath.Value : A_ScriptDir) "\" fileName)
 	switch R_DDLfileExt.Text {
 		case "xlsx", "xls":
 			FileUnion.ExportToExcel(path)
@@ -524,8 +534,8 @@ MainGui.OnEvent("Close", (*) => ExitApp())
 OnExit (*) {
 	MainGui.Hide()
 
-	APP_INI.SaveAll()                   ; 用户配置保存到ini文件
-	INI.SaveAll()                       ; 用户配置保存到ini文件
+	APP_JSON.Save()                     ; 配置保存到用户数据的json文件
+	LOCAL_JSON.Save()                   ; 配置保存到本地数据的json文件
 	L_LVrule.SaveRule()                 ; 保存当前界面的LV
 	FileUnion.Configs.SaveAllToFiles()  ; 向JSON文件中写入各个配置
 

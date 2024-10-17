@@ -1,6 +1,6 @@
 ﻿;安装XL\XL库文件
-#Include AHK_InstallFiles.ahk
-if !AHK_DirInstallTo(AHK_DATA_DIR_PATH := A_AppData "\AHKDATA")    ;非覆盖安装
+#Include DirInstallTo_AHKDATA.ahk
+if !DirInstallTo_AHKDATA(AHK_DATA_DIR_PATH := A_AppData "\AHKDATA")    ;非覆盖安装
 	MsgBox "XL\XL库文件安装错误!"
 DllCall('LoadLibrary', 'str', AHK_DATA_DIR_PATH '\XL\' (A_PtrSize * 8) 'bit\libxl.dll', 'ptr')
 #Include <XL\XL>
