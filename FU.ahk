@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.0.4"
+APP_VERSION   := "0.0.5"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -61,7 +61,6 @@ APP_JSON := JsonConfigFile(APP_DATA_PATH "\" APP_NAME "_config.json") ;创建放
 ;APP保存信息(存储在本地文件夹APP_NAME "_Data"内)
 DirCreate DATA_PATH := A_ScriptDir "\" APP_NAME "_Data"               ;产生数据文件位置
 LOCAL_JSON := JsonConfigFile(DATA_PATH "\" APP_NAME "_config.json")   ;创建放在本地文件夹配置json类
-DirCreate CONFIG_PATH := DATA_PATH "\configs"                         ;配置文件路径
 
 
 ;安装本地文件
@@ -457,6 +456,7 @@ R_BTexport_Click(thisCtrl, Info) {
 
 	fileName := (R_CBaddTimestamp.Value ? R_EDfileName.Value "-" A_Now : R_EDfileName.Value) "." R_DDLfileExt.Text
 	path := Path_Full((R_EDpath.Value && DirExist(R_EDpath.Value) ? R_EDpath.Value : A_ScriptDir) "\" fileName)
+	FileCopy(DATA_PATH "\报验申请汇总.xlsx", path)
 	switch R_DDLfileExt.Text {
 		case "xlsx", "xls":
 			FileUnion.ExportToExcel(path)
@@ -534,10 +534,9 @@ MainGui.OnEvent("Close", (*) => ExitApp())
 OnExit (*) {
 	MainGui.Hide()
 
+	L_LVrule.SaveRule()                 ; 保存当前界面的LV
 	APP_JSON.Save()                     ; 配置保存到用户数据的json文件
 	LOCAL_JSON.Save()                   ; 配置保存到本地数据的json文件
-	L_LVrule.SaveRule()                 ; 保存当前界面的LV
-	FileUnion.Configs.SaveAllToFiles()  ; 向JSON文件中写入各个配置
 
 	;清空缓存文件夹
 	DirDelete APP_DATA_CACHE_PATH, 1
@@ -558,8 +557,8 @@ MainGui.Init := (thisGui) {
 			break
 		}
 	}
-	;加载全部配置文件
-	FileUnion.Configs.LoadAllFromFiles(CONFIG_PATH)
+	;加载合并的配置
+	FileUnion.Configs.Load(LOCAL_JSON.Init("UnionConfigs", Map())) ;从json对象加载配置
 	;刷新配置CB               
 	L_CBconfig.Update(FileUnion.Configs.instances, L_CBconfig.lastText)
 	if L_CBconfig.Value { 

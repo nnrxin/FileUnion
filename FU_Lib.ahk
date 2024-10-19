@@ -55,8 +55,6 @@ Class FileUnion {
 	class Configs {
 
 		; 静态参数
-		static WorkingDir := A_ScriptDir
-		static Encoding := "UTF-8"
 		static defaultRule := [
 			["表序号"     , "1"                          , ""      ],
 			["表名称"     , ""                           , ""      ],
@@ -92,8 +90,16 @@ Class FileUnion {
 				this.instances[name] := value
 			}
 		}
-		static Add(name) {
-			if !this.Has(name)
+		static Load(JsonMap) { ;从json对象加载配置
+			JsonMap := (JsonMap is Map) ? JsonMap : Map()
+			for name, rules in (this.instances := JsonMap) {
+				config := this.Add(name, true)
+				if rules is Array
+					config.rules := rules
+			}
+		}
+		static Add(name, force := false) {
+			if force || !this.Has(name)
 				this[name] := this(name)
 			return this.activeConfig := this[name]
 		}
@@ -112,41 +118,23 @@ Class FileUnion {
 				throw Error('Config [' name '] does not exist')
 			return this.activeConfig := this[name]
 		}
-		static ReName(name, NewName, Overwrite := true) {
+		static ReName(name, NewName) {
 			if this.Has(NewName)
 				throw Error('Config [' NewName '] already exist')
-			if this[name].ReName(NewName, Overwrite)
-				return 1 ; 重命名失败
+			this[name].name := NewName
 			this.instances[NewName] := this.instances[name]
-			this.instances.Delete(name)
+			this.instances.Delete(name) ; 待确定
 		}
 		static Delete(name) {
 			if !this.Has(name)
 				throw Error('Config [' name '] does not exist')
 			if this.activeConfig.name = name
 				this.activeConfig := ""
-			try FileDelete(this[name].FilePath) ; 尝试删除文件
-			this[name] := ""
 			this.instances.Delete(name)
 		}
 		static Clear() {
 			this.activeConfig := ""
 			this.instances.Clear()
-		}
-		;获取文件夹中的JSON文件并加载
-		static LoadAllFromFiles(dirPath?) {
-			if IsSet(dirPath) && DirExist(dirPath)
-				this.WorkingDir := dirPath
-			this.Clear()
-			Loop Files, this.WorkingDir "\*.json" {
-				if RegExMatch(A_LoopFileName, "i)^config-(.*).json$", &SubPat)
-					this.Add(SubPat[1]).LoadFromFile()
-			}
-		}
-		;保存LV参数到JSON文件
-		static SaveAllToFiles() {
-			for _, config in this.instances
-			    config.SaveToFile()
 		}
 		; 获取规则模板
 		static GetDefaultRule() => this.defaultRule.Clone()
@@ -155,9 +143,6 @@ Class FileUnion {
 		; 构造函数
 		__New(name) {
 			this.name := name
-			this.WorkingDir := FileUnion.Configs.WorkingDir
-			this.Encoding := FileUnion.Configs.Encoding
-			this.FilePath := this.WorkingDir "\config-" name ".json"
 			this.rules := [[],[],[],[],[],[],[],[],[],[]] ; 预设10个配置
 			this.deepRules := []
 		}
@@ -174,30 +159,6 @@ Class FileUnion {
 			set {
 				this.rules[i] := value
 			}
-		}
-
-		; 重命名,失败时返回1
-		ReName(NewName, Overwrite := true) {
-			this.name := NewName
-			newFilePath := this.WorkingDir "\config-" NewName ".json"
-			if FileExist(this.FilePath) {
-				try FileMove(this.FilePath, newFilePath, Overwrite)
-				catch
-					return 1
-			}
-			this.FilePath := this.WorkingDir "\config-" NewName ".json"
-		}
-		;从JSON文件加载参数,失败返回1
-		LoadFromFile() {
-			try this.rules := JSON.parse(FileRead(this.FilePath, this.Encoding))
-			catch
-				return 1
-		}
-		;保存LV参数到JSON文件
-		SaveToFile() {
-			DirCreate Path_Dir(this.FilePath)
-			try FileDelete(this.FilePath)
-			FileAppend(JSON.stringify(this.rules), this.FilePath, this.Encoding)
 		}
 
 		;转化成底层配置
@@ -473,16 +434,27 @@ Class FileUnion {
 	 * 导出为Excel
 	 */
 	static ExportToExcel(path) {
+		book := XL.Load(path)
+		sheet := book[0]
+		for R, row in this.Data {
+			for C, value in row {
+				sheet[R, C-1] := IsNumber(value) ? Number(value) : value
+			}
+		}
+		book.save()
+		book := ''
+		/*
 		book := XL.New(Path_Extension(path))
 		sheet := book.addSheet('Sheet1')
 		for R, FieldName in this.Data.FieldNames
 			sheet[0, R-1] := FieldName
 		for R, row in this.Data {
 			for C, value in row
-				sheet[R, C-1] := value
+				sheet[R, C-1] := IsNumber(value) ? Number(value) : value
 		}
 		book.save(path)
 		book := ''
+		*/
 	}
 
 	/**
