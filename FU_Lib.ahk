@@ -364,10 +364,22 @@ Class FileUnion {
 			try table := document.Tables.Item(IsInteger(deepRule.tableName) ? deepRule.tableName : 1) ; 非整数则转化为数字1
 			catch
 				continue
+			/*
+			;测试用
+			sss1 := sss2 := ""
+			sss0 := table.Cell(2, 1).Range.Text
+			;sss0 := RegExReplace(sss0, "(" Chr(13) "|" Chr(11) ")" , "`n")
+			Loop Parse sss0 {
+				sss1 .= A_LoopField
+				sss2 .= "{" Ord(A_LoopField) "}"
+			}
+			A_Clipboard := sss2
+			MsgBox sss1 "`n`n" sss2
+			*/
 			;匹配信息确认
 			passMatch := true
 			for _, match in deepRule.match {
-				if !RegExMatch(SubStr(table.Cell(match.row, match.column).Range.Text,1,-2), "i)" match.value) {
+				if !RegExMatch(table.Cell(match.row, match.column).Range.Text, "i)" match.value) {
 					passMatch := false
 					break
 				}
@@ -388,9 +400,9 @@ Class FileUnion {
 					catch 
 						fixedFields[Index] := v
 				} else if field.HasProp("row") {
-					try fixedFields[Index] := Format(field.FormatStr, SubStr(table.Cell(field.row, field.column).Range.Text,1,-2))
+					try fixedFields[Index] := Format(field.FormatStr, TableText(table,field.row,field.column))
 					catch
-						fixedFields[Index] := SubStr(table.Cell(field.row, field.column).Range.Text,1,-2)
+						fixedFields[Index] := TableText(table,field.row,field.column)
 				} else
 					loopedFields[Index] := field
 			}
@@ -400,12 +412,12 @@ Class FileUnion {
 			Loop table.Rows.Count - rowI {
 				rowI++
 				;检查是否中止
-				if SubStr(table.Cell(rowI,deepRule.endCheckColumn).Range.Text,1,-2) = '' {
+				if TableText(table,rowI,deepRule.endCheckColumn) = '' {
 					if ++endCheckCount > deepRule.endCheckMaxCount
 						break
 				}
 				;检查非空列状态
-				if deepRule.HasProp("nonemptyColumn") and Trim(SubStr(table.Cell(rowI,deepRule.nonemptyColumn).Range.Text,1,-2), ' `t`r`n') = ""
+				if deepRule.HasProp("nonemptyColumn") and Trim(TableText(table,rowI,deepRule.nonemptyColumn), ' `t`r`n') = ""
 					continue
 				;开始添加一条信息
 				row := []
@@ -413,9 +425,9 @@ Class FileUnion {
 				for Index, value in fixedFields ; 固定
 					row[Index] := value
 				for Index, field in loopedFields {  ; 循环
-					try row[Index] := Format(field.FormatStr, SubStr(table.Cell(rowI,field.column).Range.Text,1,-2))
+					try row[Index] := Format(field.FormatStr, TableText(table,rowI,field.column))
 					catch
-						row[Index] := SubStr(table.Cell(rowI,field.column).Range.Text,1,-2)
+						row[Index] := TableText(table,rowI,field.column)
 				}
 				this.Data.Add(row*)
 			}
@@ -426,6 +438,11 @@ Class FileUnion {
 	    document.Close()
 		document := ''
 		return matched ?? 0
+
+		;内部函数:处理word格内一些字符: 垂直制表符{11}和回车键{13}转换成换行键{10}, 去除末尾的{13}{7}
+		static TableText(table, row, col) {
+			return RegExReplace(SubStr(table.Cell(row,col).Range.Text,1,-2), "(" Chr(13) "|" Chr(11) ")" , "`n")
+		}
 	}
 
 
@@ -434,27 +451,22 @@ Class FileUnion {
 	 * 导出为Excel
 	 */
 	static ExportToExcel(path) {
-		book := XL.Load(path)
-		sheet := book[0]
+		if FileExist(path) {
+			book := XL.Load(path)
+			sheet := book[0]
+		} else {
+			book := XL.New(Path_Extension(path))
+			sheet := book.addSheet('Sheet1')
+			for R, FieldName in this.Data.FieldNames
+				sheet[0, R-1] := FieldName
+		}
 		for R, row in this.Data {
 			for C, value in row {
 				sheet[R, C-1] := IsNumber(value) ? Number(value) : value
 			}
 		}
-		book.save()
-		book := ''
-		/*
-		book := XL.New(Path_Extension(path))
-		sheet := book.addSheet('Sheet1')
-		for R, FieldName in this.Data.FieldNames
-			sheet[0, R-1] := FieldName
-		for R, row in this.Data {
-			for C, value in row
-				sheet[R, C-1] := IsNumber(value) ? Number(value) : value
-		}
 		book.save(path)
 		book := ''
-		*/
 	}
 
 	/**

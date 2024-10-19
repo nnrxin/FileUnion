@@ -426,7 +426,18 @@ MainGui.SetFont("c9382C9 bold", "微软雅黑")
 L_GBsending := MainGui.Add("GroupBox", "x+7 ym+12 Section w225 h560 AX", "导出")
 MainGui.SetFont("cDefault norm", "微软雅黑")
 
-MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200 AXP", "文件路径")
+MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200 AXP", "导出模板")
+R_EDtemplatePath := MainGui.Add("Edit", "x+0 yp w130 h25 AXP")
+R_EDtemplatePath.Value := LOCAL_JSON.Init("R_EDtemplatePath.Value", "")
+R_BTtemplatePath := MainGui.Add("button", "x+0 yp w25 h25 AXP", "...")
+R_BTtemplatePath.OnEvent("Click", (*) {
+	MainGui.Opt("+OwnDialogs")    ;对话框出现时禁止操作主GUI
+	if newPath := FileSelect(1, Path_Dir(R_EDpath.Value, true, A_ScriptDir), "选择一个文件 - " A_ScriptName, "Excel/Access文件 (*.xlsx; *.xls; *.accdb; *.mdb)") {
+		R_EDtemplatePath.Value := newPath
+	}
+})
+
+MainGui.Add("Text", "xs+10 y+5 w50 h25 +0x200 AXP", "文件路径")
 R_EDpath := MainGui.Add("Edit", "x+0 yp w130 h25 AXP")
 R_EDpath.Value := LOCAL_JSON.Init("R_EDpath.Value", "")
 R_BTdir := MainGui.Add("button", "x+0 yp w25 h25 AXP", "...")
@@ -436,6 +447,7 @@ R_BTdir.OnEvent("Click", (*) {
 		R_EDpath.Value := newPath
 	}
 })
+
 
 MainGui.Add("Text", "xs+10 y+5 w50 h25 +0x200 AXP", "文件名称")
 R_EDfileName := MainGui.Add("Edit", "x+0 yp w155 h25 AXP")
@@ -456,7 +468,8 @@ R_BTexport_Click(thisCtrl, Info) {
 
 	fileName := (R_CBaddTimestamp.Value ? R_EDfileName.Value "-" A_Now : R_EDfileName.Value) "." R_DDLfileExt.Text
 	path := Path_Full((R_EDpath.Value && DirExist(R_EDpath.Value) ? R_EDpath.Value : A_ScriptDir) "\" fileName)
-	FileCopy(DATA_PATH "\报验申请汇总.xlsx", path)
+	if FileExist(R_EDtemplatePath.Value)
+	    FileCopy(R_EDtemplatePath.Value, path)
 	switch R_DDLfileExt.Text {
 		case "xlsx", "xls":
 			FileUnion.ExportToExcel(path)
