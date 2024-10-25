@@ -17,35 +17,62 @@ Class FileUnion {
 			this.WordApp.Quit()
 	}
 
-
 	/**
-	 * 获取文件列表
+	 * 文件相关
 	 */
-	static files := []
-	static LoadDir(dirPath, force := false, noRepeat := false, limitFileSizeKB := -1) {
-		;重复路径优化
-		static lastpath := ""
-		if !dirPath || dirPath = lastpath && force = false
-			return this.files
-		lastpath := dirPath
-		;相关参数
-		static exts := ["xls","xlsx","doc","docx"]
-		static ignorefileNames := Map("Thumbs.db",true, "thumbs.db",true) ; 忽略的文件名称
-		;开始加载
-		this.files.Length := 0
-		existsFileName := Map()
-		Loop Files, dirPath "\*.*", "FR"{
-			if !exts.IndexOf(A_LoopFileExt)
-			or InStr(A_LoopFileAttrib, "H") ; 跳过隐藏文件
-			or ignorefileNames.Has(A_LoopFileName)
-			or noRepeat and existsFileName.Has(A_LoopFileName "|" A_LoopFileTimeModified) ; 文件名相同且修改日期相同
-			or A_LoopFileSizeKB < limitFileSizeKB
-				continue
-			existsFileName[A_LoopFileName "|" A_LoopFileTimeModified] := true
-			fileType := RegExMatch(A_LoopFileExt, "i)^xlsx?") ? "excel" : "word"
-			this.files.Push({path: A_LoopFileFullPath, name: A_LoopFileName, type: fileType})
+	class Files {
+		static exts := ["xls","xlsx","doc","docx"]           ; 文件扩展名
+		static ignorefileNames := ["Thumbs.db", "thumbs.db"] ; 忽略的文件名称
+
+		static items := Map() ; 实例集合
+		static Has(path) => this.items.Has(path) ; 判断是否有该实例
+		static Count => this.items.Count ; 实例数量
+		static Delete(path) => this.items.Delete(path) ; 删除
+		static Clear() => this.items.Clear() ; 清空
+		static __Enum(NumberOfVars) => this.items.__Enum(NumberOfVars) ; 枚举实例
+		static __Item[path] {
+			get {
+				if this.items.Has(path)
+					return this.items[path]
+			}
+			set {
+				this.items[path] := value
+			}
 		}
-		return this.files
+		;添加文件, 添加成功时返回文件
+		static Add(path) {
+			if this.Has(path)
+				return
+			SplitPath path, &OutFileName, &OutDir, &OutExtension, &OutNameNoExt, &OutDrive
+			if !this.exts.IndexOf(OutExtension)   ; 跳过后缀不匹配的文件
+			or InStr(FileGetAttrib(path), "H")    ; 跳过隐藏文件
+			or FileGetSize(path, "KB") < 1        ; 跳过文件太小的文件
+			;or noRepeat and existsFileName.Has(A_LoopFileName "|" A_LoopFileTimeModified) ; 文件名相同且修改日期相同
+				return
+			return this[path] := this(path, OutFileName, OutExtension)
+		}
+		;加载一些文件, 返回新增的文件
+		static Load(pathArray) {
+			files := []
+			for _, path in pathArray {
+				if DirExist(path) {
+					Loop Files, path "\*.*", "FR"
+						if file := this.Add(A_LoopFileFullPath)
+							files.Push(file)
+					continue
+				}
+				if file := this.Add(path)
+					files.Push(file)
+			}
+			return files
+		}
+		; 构造函数
+		__New(path, name, ext) {
+			this.path := path
+			this.name := name
+			this.ext := ext
+			this.type := RegExMatch(ext, "i)^xlsx?") ? "excel" : "word"
+		}
 	}
 
 
@@ -61,7 +88,7 @@ Class FileUnion {
 			["2,1"        , "(日期|date)"                , ""      ],
 			["3,4"        , "(项目编号|item No)"         , ""      ],
 			["3,7"        , "(检验项目|inspection item)" , ""      ],
-			["3,8"        , "(检验员|QC|inscpetor)"      , ""      ],
+			["3,8"        , "(检验员|QC|inspector)"      , ""      ],
 			["起始行"     , "4"                          , ""      ],
 			["非空列"     , "7"                          , ""      ],
 			["中止检测列" , "1"                          , "5"     ],
@@ -78,7 +105,7 @@ Class FileUnion {
 		static instances := Map() ; 实例集合
 		static activeConfig := "" ; 当前活动配置
 		static Has(name) => this.instances.Has(name) ; 判断是否有该实例
-		static Count() => this.instances.Count() ; 实例数量
+		static Count => this.instances.Count ; 实例数量
 		static __Enum(NumberOfVars) => this.instances.__Enum(NumberOfVars) ; 枚举实例
 		static __Item[name] {
 			get {
@@ -92,10 +119,10 @@ Class FileUnion {
 		}
 		static Load(JsonMap) { ;从json对象加载配置
 			JsonMap := (JsonMap is Map) ? JsonMap : Map()
-			for name, rules in (this.instances := JsonMap) {
+			for name, configMap in (this.instances := JsonMap) {
 				config := this.Add(name, true)
-				if rules is Array
-					config.rules := rules
+				for k, v in configMap
+					config.%k% := v
 			}
 		}
 		static Add(name, force := false) {
@@ -128,7 +155,7 @@ Class FileUnion {
 		static Delete(name) {
 			if !this.Has(name)
 				throw Error('Config [' name '] does not exist')
-			if this.activeConfig.name = name
+			if this.activeConfig && this.activeConfig.name = name
 				this.activeConfig := ""
 			this.instances.Delete(name)
 		}
@@ -143,15 +170,14 @@ Class FileUnion {
 		; 构造函数
 		__New(name) {
 			this.name := name
-			this.rules := [[],[],[],[],[],[],[],[],[],[]] ; 预设10个配置
+			this.rules := [[],[],[],[],[],[],[],[],[],[]] ; 预设10个提取规则
+			this.process := [] ; 内容处理规则
 			this.deepRules := []
 		}
 		; 删除
 		__Delete() {
 		}
-		; 枚举实例
-		__Enum(NumberOfVars) => this.rules.__Enum(NumberOfVars) 
-		; 数组方式调用
+		; Map方式调用
 		__Item[i] {
 			get {
 				return this.rules[i]
@@ -164,6 +190,7 @@ Class FileUnion {
 		;转化成底层配置
 		ConvertToDeep() {
 			this.deepRules.Length := 0
+			;配置提取规则
 			for _, rule in this.rules {
 				;跳过空规则
 				if !rule.Length
@@ -209,8 +236,34 @@ Class FileUnion {
 				deepRule.startRow := deepRule.HasProp("startRow") ? deepRule.startRow : 1
 				deepRule.endCheckColumn := deepRule.HasProp("endCheckColumn") ? deepRule.endCheckColumn : 1
 				deepRule.endCheckMaxCount := deepRule.HasProp("endCheckMaxCount") ? deepRule.endCheckMaxCount : 0
+				;添加配置内容处理规则
+				FieldIndex := Map()
+				for i, field in deepRule.fields {
+					FieldIndex[field.name] := i
+					field.RegExReplaceOpts := []
+					field.GetValue := GetValue ;绑定函数
+				}
+				for i, arr in this.process {
+					FieldName := arr[1], NeedleRegEx := arr[2], Replacement := arr[3]
+					if !FieldIndex.Has(FieldName) ; 字段不存在时跳过
+						continue
+					fields[FieldIndex[FieldName]].RegExReplaceOpts.Push([NeedleRegEx,Replacement])
+				}
 			}
 			return this.deepRules
+
+			; 内部函数: 数据处理函数
+			GetValue(field, value) {
+				;尝试格式化
+				try value := Format(field.FormatStr, value)
+				catch
+					value := value
+				;正则替换处理
+				for _, rule in field.RegExReplaceOpts {
+					value := RegExReplace(value, rule[1], rule[2])
+				}
+				return value
+			}
 		}
 	}
 
@@ -259,8 +312,7 @@ Class FileUnion {
 	}
 
 	/**
-	 * 合并文件
-	 */
+	 * 合并文件示例
 	static UnionFiles() {
 		this.Data.Clear()
 		deepRules := this.Configs.activeConfig.ConvertToDeep()
@@ -271,9 +323,10 @@ Class FileUnion {
 				this.LoadWord(file, deepRules)
 		}
 	}
+	*/
 
 	/**
-	 * 读取Excel文件,识别成功返回匹配的配置序号,失败返回0
+	 * 提取Excel文件内容,识别成功返回匹配的配置序号,失败返回0,文件读取失败返回-1
 	 */
 	static LoadExcel(file, deepRules) {
 		flieName := file.name ; 供参数调用
@@ -303,13 +356,9 @@ Class FileUnion {
 				if field.HasProp("variable") {
 					if !IsSet(v := %(field.variable)%) 
 						continue
-					try fixedFields[Index] := Format(field.FormatStr, v)
-					catch 
-						fixedFields[Index] := v
+					fixedFields[Index] := field.GetValue(v)
 				} else if field.HasProp("row") {
-					try fixedFields[Index] := Format(field.FormatStr, sheet[field.row-1,field.column-1].value)
-					catch
-						fixedFields[Index] := sheet[field.row-1,field.column-1].value
+					fixedFields[Index] := field.GetValue(sheet[field.row-1,field.column-1].value)
 				} else
 					loopedFields[Index] := field
 			}
@@ -332,9 +381,7 @@ Class FileUnion {
 				for Index, value in fixedFields ; 固定
 					row[Index] := value
 				for Index, field in loopedFields {  ; 循环
-					try row[Index] := Format(field.FormatStr, sheet[rowI-1,field.column-1].value)
-					catch
-						row[Index] := sheet[rowI-1,field.column-1].value
+					row[Index] := field.GetValue(sheet[rowI-1,field.column-1].value)
 				}
 				this.Data.Add(row*)
 			}
@@ -347,7 +394,7 @@ Class FileUnion {
 	}
 
 	/**
-	 * 读取Word文件,识别成功返回匹配的配置序号,失败返回0
+	 * 提取Word文件内容,识别成功返回匹配的配置序号,失败返回0
 	 * 说明: Range.Text 最后两位分别是ASCII 13和ASCII 7
 	 */
 	static LoadWord(file, deepRules) {
@@ -396,13 +443,9 @@ Class FileUnion {
 				if field.HasProp("variable") {
 					if !IsSet(v := %(field.variable)%) 
 						continue
-					try fixedFields[Index] := Format(field.FormatStr, v)
-					catch 
-						fixedFields[Index] := v
+					fixedFields[Index] := field.GetValue(v)
 				} else if field.HasProp("row") {
-					try fixedFields[Index] := Format(field.FormatStr, TableText(table,field.row,field.column))
-					catch
-						fixedFields[Index] := TableText(table,field.row,field.column)
+					fixedFields[Index] := field.GetValue(TableText(table,field.row,field.column))
 				} else
 					loopedFields[Index] := field
 			}
@@ -425,9 +468,7 @@ Class FileUnion {
 				for Index, value in fixedFields ; 固定
 					row[Index] := value
 				for Index, field in loopedFields {  ; 循环
-					try row[Index] := Format(field.FormatStr, TableText(table,rowI,field.column))
-					catch
-						row[Index] := TableText(table,rowI,field.column)
+					row[Index] := field.GetValue(TableText(table,rowI,field.column))
 				}
 				this.Data.Add(row*)
 			}
