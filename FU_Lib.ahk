@@ -137,7 +137,7 @@ Class FileUnion {
 				throw Error('Config [' cloneFromName '] does not exist')
 			this[name] := this(name)
 			this[name].rules := this[cloneFromName].rules.Clone()
-			this[name].deepRules := this[cloneFromName].deepRules.Clone()
+			this[name].process := this[cloneFromName].process.Clone()
 			return this.activeConfig := this[name]
 		}
 		static Switch(name) {
@@ -172,7 +172,6 @@ Class FileUnion {
 			this.name := name
 			this.rules := [[],[],[],[],[],[],[],[],[],[]] ; 预设10个提取规则
 			this.process := [] ; 内容处理规则
-			this.deepRules := []
 		}
 		; 删除
 		__Delete() {
@@ -189,14 +188,14 @@ Class FileUnion {
 
 		;转化成底层配置
 		ConvertToDeep() {
-			this.deepRules.Length := 0
+			deepRules := []
 			;配置提取规则
 			for _, rule in this.rules {
 				;跳过空规则
 				if !rule.Length
 					continue
 				deepRule := {}
-				this.deepRules.Push(deepRule)
+				deepRules(deepRule)
 				;确定各参数
 				deepRule.match := []       ; 匹配信息
 				deepRule.fields := []      ; 字段信息
@@ -250,7 +249,7 @@ Class FileUnion {
 					fields[FieldIndex[FieldName]].RegExReplaceOpts.Push([NeedleRegEx,Replacement])
 				}
 			}
-			return this.deepRules
+			return deepRules
 
 			; 内部函数: 数据处理函数
 			GetValue(field, value) {
