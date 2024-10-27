@@ -226,6 +226,8 @@ Class FileUnion {
 							fields.Push({name:fieldName, column:v})
 						else if RegExMatch(v, "^%.+%$") ; 参数
 							fields.Push({name:fieldName, variable:SubStr(v, 2, -1)})
+						else
+							fields.Push({name:fieldName, value:v}) ; 原义字符串
 						if v2 != "" && fields.Length > fieldsLength
 							fields[fields.Length].FormatStr := v2 ; 添加格式字符串
 					}
@@ -351,8 +353,10 @@ Class FileUnion {
 			for _, field in deepRule.fields {
 				; 判断是否包含字段名,不包含时新建
 				Index := this.Data.FieldIndex(field.name) || this.Data.AddField(field.name)
-				; 预处理配置              field.HasProp("FormatStr") 
-				if field.HasProp("variable") {
+				; 预处理配置
+				if field.HasProp("value") {
+					fixedFields[Index] := field.value
+				} else if field.HasProp("variable") {
 					if !IsSet(v := %(field.variable)%) 
 						continue
 					fixedFields[Index] := field.GetValue(v)
@@ -409,18 +413,6 @@ Class FileUnion {
 			try table := document.Tables.Item(IsInteger(deepRule.tableName) ? deepRule.tableName : 1) ; 非整数则转化为数字1
 			catch
 				continue
-			/*
-			;测试用
-			sss1 := sss2 := ""
-			sss0 := table.Cell(2, 1).Range.Text
-			;sss0 := RegExReplace(sss0, "(" Chr(13) "|" Chr(11) ")" , "`n")
-			Loop Parse sss0 {
-				sss1 .= A_LoopField
-				sss2 .= "{" Ord(A_LoopField) "}"
-			}
-			A_Clipboard := sss2
-			MsgBox sss1 "`n`n" sss2
-			*/
 			;匹配信息确认
 			passMatch := true
 			for _, match in deepRule.match {
@@ -437,8 +429,10 @@ Class FileUnion {
 			for _, field in deepRule.fields {
 				; 判断是否包含字段名,不包含时新建
 				Index := this.Data.FieldIndex(field.name) || this.Data.AddField(field.name)
-				; 预处理配置              field.HasProp("FormatStr") 
-				if field.HasProp("variable") {
+				; 预处理配置
+				if field.HasProp("value") {
+					fixedFields[Index] := field.value
+				} else if field.HasProp("variable") {
 					if !IsSet(v := %(field.variable)%) 
 						continue
 					fixedFields[Index] := field.GetValue(v)
@@ -449,7 +443,7 @@ Class FileUnion {
 			}
 			;循环获取各行数据(rowI起始行为1)
 			endCheckCount := 0
-			Loop table.Rows.Count - rowI + 1 {
+			Loop table.Rows.Count - deepRule.startRow + 1 {
 				rowI := deepRule.startRow + A_Index - 1
 				;检查是否中止
 				if TableText(table,rowI,deepRule.endCheckColumn) = '' {
@@ -501,7 +495,11 @@ Class FileUnion {
 		for R, row in this.Data {
 			for C, value in row {
 				sheet[R, C-1] := IsNumber(value) ? Number(value) : value
+				if R > 1
+					sheet[R, C-1].format := sheet.cellFormat(R-1, C-1)
 			}
+			if R < this.Data.Rows.Length
+				sheet.insertRow(R+1, R+1) ; 向下插入一行
 		}
 		book.save(path)
 		book := ''
