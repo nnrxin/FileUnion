@@ -204,7 +204,7 @@ Class FileUnion {
 					if !k && !v
 						continue
 					else if (k = "表序号") && v && IsDigit(v) && v > 0
-						deepRule.tableName := Number(v)
+						deepRule.tableIndex := Number(v)
 					else if (k = "表名称") && v
 						deepRule.tableName := v
 					else if (k = "起始行") && v && IsDigit(v)
@@ -233,7 +233,7 @@ Class FileUnion {
 					}
 				}
 				;补全必要参数
-				deepRule.tableName := deepRule.HasProp("tableName") ? deepRule.tableName : 1
+				deepRule.tableIndex := deepRule.HasProp("tableIndex") ? deepRule.tableIndex : 1
 				deepRule.startRow := deepRule.HasProp("startRow") ? deepRule.startRow : 1
 				deepRule.endCheckColumn := deepRule.HasProp("endCheckColumn") ? deepRule.endCheckColumn : 1
 				deepRule.endCheckMaxCount := deepRule.HasProp("endCheckMaxCount") ? deepRule.endCheckMaxCount : 0
@@ -332,9 +332,29 @@ Class FileUnion {
 	static LoadExcel(file, deepRules) {
 		flieName := file.name ; 供参数调用
 		book := XL.Load(file.path)
+		;遍历全部表格,获取表名/隐藏表等信息
+		hidenSheetIndexs := []
+		sheetNames := []
+		loop book.sheetCount() {
+			sheet := book[A_Index-1]
+			sheetNames.Push(sheet.name())
+			if sheet.hidden() 
+				hidenSheetIndexs.Push(A_Index-1)
+		}
+		;按规则获取文件内容
 		for cfgI, deepRule in deepRules {
-			;尝试获取表
-			try sheet := book[IsInteger(deepRule.tableName) ? deepRule.tableName - 1 : deepRule.tableName] ; 数字则-1
+			;尝试获取表,优先使用姓名,使用序号时会跳过
+			if deepRule.HasProp("tableName") && sheetNames.IndexOf(deepRule.tableName)
+				sheetName := deepRule.tableName
+			else {
+				sheetName := deepRule.tableIndex-1
+				for hidenSheetIndex in hidenSheetIndexs
+					if hidenSheetIndex <= sheetName
+						sheetName++
+					else
+						break
+			}
+			try sheet := book[sheetName]
 			catch
 				continue
 			;匹配信息确认
@@ -410,7 +430,7 @@ Class FileUnion {
 
 		for cfgI, deepRule in deepRules {
 			;尝试获取表
-			try table := document.Tables.Item(IsInteger(deepRule.tableName) ? deepRule.tableName : 1) ; 非整数则转化为数字1
+			try table := document.Tables.Item(deepRule.tableIndex)
 			catch
 				continue
 			;匹配信息确认
