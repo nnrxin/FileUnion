@@ -195,7 +195,7 @@ Class FileUnion {
 				if !rule.Length
 					continue
 				deepRule := {}
-				deepRules(deepRule)
+				deepRules.Push(deepRule)
 				;确定各参数
 				deepRule.match := []       ; 匹配信息
 				deepRule.fields := []      ; 字段信息
@@ -361,11 +361,10 @@ Class FileUnion {
 				} else
 					loopedFields[Index] := field
 			}
-			;循环获取各行数据
-			rowI := deepRule.startRow - 1
+			;循环获取各行数据(rowI起始行为1)
 			endCheckCount := 0
-			Loop {
-				rowI++
+			Loop sheet.lastRow()+1 - deepRule.startRow + 1 {
+				rowI := deepRule.startRow + A_Index - 1
 				;检查是否中止
 				if sheet[rowI-1, deepRule.endCheckColumn-1].value = '' {
 					if ++endCheckCount > deepRule.endCheckMaxCount
@@ -448,11 +447,10 @@ Class FileUnion {
 				} else
 					loopedFields[Index] := field
 			}
-			;循环获取各行数据
-			rowI := deepRule.startRow - 1
+			;循环获取各行数据(rowI起始行为1)
 			endCheckCount := 0
-			Loop table.Rows.Count - rowI {
-				rowI++
+			Loop table.Rows.Count - rowI + 1 {
+				rowI := deepRule.startRow + A_Index - 1
 				;检查是否中止
 				if TableText(table,rowI,deepRule.endCheckColumn) = '' {
 					if ++endCheckCount > deepRule.endCheckMaxCount
