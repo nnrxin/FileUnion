@@ -48,7 +48,7 @@ ConfigGui_SB := ConfigGui.Add("StatusBar")
 \************/
 
 ; 配置列表
-C_LVconfigs := ConfigGui.Add("ListView", "xm+10 ym+10 w150 h" ConfigGuiHeight - 70 " Grid -Multi BackgroundFEFEFE", ["配置"])
+C_LVconfigs := ConfigGui.Add("ListView", "xm+10 ym+10 w150 h" ConfigGuiHeight - 70 " Grid -Multi +LV0x10000 BackgroundFEFEFE", ["配置"])
 ;列表选择项目变化
 C_LVconfigs.SelectedConfig := ""
 C_LVconfigs.OnEvent("ItemSelect", (thisLV, Item, Selected) {
@@ -219,7 +219,7 @@ C_BTDeleteConfig.OnEvent("Click", (thisCtrl, Info) {
 
 ;Group 配置
 ConfigGui.SetFont("c0070DE bold", "微软雅黑")
-C_TABconfig := ConfigGui.Add("Tab3", "x+10 y10 Section w" ConfigGuiWidth - 180 " h" ConfigGuiHeight - 40, ["文件添加规则","内容提取规则","内容处理规则"])
+C_TABconfig := ConfigGui.Add("Tab3", "x+10 y10 Section w" ConfigGuiWidth - 180 " h" ConfigGuiHeight - 40, ["文件添加","内容提取","内容处理"])
 ConfigGui.SetFont("cDefault norm", "微软雅黑")
 C_TABconfig.Value := C_TABconfig.lastValue := 2
 /*
@@ -346,7 +346,7 @@ C_BTclearRule_Click(thisCtrl, Info) {
 
 
 ;提取规则LV
-C_LVrule := ConfigGui.Add("ListView", "xs+10 y+5 w300 h" ConfigGuiHeight - 150 " Grid -ReadOnly BackgroundFEFEFE", ["键","值","附加"])
+C_LVrule := ConfigGui.Add("ListView", "xs+10 y+5 w300 h" ConfigGuiHeight - 150 " Grid -ReadOnly +LV0x10000 BackgroundFEFEFE", ["键","值","附加"])
 C_LVrule.ModifyCol(1, 90)
 C_LVrule.ModifyCol(2, 130)
 C_LVrule.ModifyCol(3, 76)
@@ -423,7 +423,7 @@ C_TABconfig.UseTab(3)
 
 
 ;处理规则LV
-C_LVprocess := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid -ReadOnly BackgroundFEFEFE", ["字段","替换字符","替换为"])
+C_LVprocess := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid -ReadOnly +LV0x10000 BackgroundFEFEFE", ["字段","替换字符","替换为"])
 C_LVprocess.ModifyCol(1, 100)
 C_LVprocess.ModifyCol(2, 100)
 C_LVprocess.ModifyCol(3, 96)

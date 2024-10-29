@@ -72,6 +72,7 @@ Class FileUnion {
 			this.name := name
 			this.ext := ext
 			this.type := RegExMatch(ext, "i)^xlsx?") ? "excel" : "word"
+			this.color := 0xFEFEFE
 		}
 	}
 
@@ -203,9 +204,10 @@ Class FileUnion {
 					k := arr[1], v := arr[2], v2 := arr[3]
 					if !k && !v
 						continue
-					else if (k = "表序号") && v && IsDigit(v) && v > 0
+					else if (k = "表序号") && v && IsDigit(v) && v > 0 {
 						deepRule.tableIndex := Number(v)
-					else if (k = "表名称") && v
+						deepRule.inculdeHidenTable := v2 ; 包含隐藏表
+					} else if (k = "表名称") && v
 						deepRule.tableName := v
 					else if (k = "起始行") && v && IsDigit(v)
 						deepRule.startRow := Number(v)
@@ -234,6 +236,7 @@ Class FileUnion {
 				}
 				;补全必要参数
 				deepRule.tableIndex := deepRule.HasProp("tableIndex") ? deepRule.tableIndex : 1
+				deepRule.inculdeHidenTable := deepRule.HasProp("inculdeHidenTable") ? deepRule.inculdeHidenTable : ""
 				deepRule.startRow := deepRule.HasProp("startRow") ? deepRule.startRow : 1
 				deepRule.endCheckColumn := deepRule.HasProp("endCheckColumn") ? deepRule.endCheckColumn : 1
 				deepRule.endCheckMaxCount := deepRule.HasProp("endCheckMaxCount") ? deepRule.endCheckMaxCount : 0
@@ -348,11 +351,14 @@ Class FileUnion {
 				sheetName := deepRule.tableName
 			else {
 				sheetName := deepRule.tableIndex-1
-				for hidenSheetIndex in hidenSheetIndexs
-					if hidenSheetIndex <= sheetName
-						sheetName++
-					else
-						break
+				;跳过隐藏表
+				if !deepRule.inculdeHidenTable {
+					for hidenSheetIndex in hidenSheetIndexs
+						if hidenSheetIndex <= sheetName
+							sheetName++
+						else
+							break 
+				}
 			}
 			try sheet := book[sheetName]
 			catch

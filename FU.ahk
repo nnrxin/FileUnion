@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.1.2"
+APP_VERSION   := "0.1.3"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -132,20 +132,46 @@ L_BTsetConfig.OnEvent("Click", (*) {
 })
 
 ;文件列表
-L_LVfiles := MainGui.Add("ListView", "xs y+5 w250 h" MainGuiHeight-180 " Grid AltSubmit BackgroundFEFEFE AH", ["文件名","路径"])
-G.files := Map()
+L_LVfiles := MainGui.Add("ListView", "xs y+5 w250 h" MainGuiHeight-180 " Grid AltSubmit +LV0x10000 BackgroundFEFEFE AH", ["文件名","路径"])
+L_LVfiles.OnEvent("DoubleClick", (thisLV, rowI) {
+	if !rowI || !FileExist(path := thisLV.GetText(rowI,2))
+		return
+	Run path
+})
+L_LVfiles.OnEvent("ColClick", (*) {
+	L_LVfiles.Opt("-Redraw")
+	Loop L_LVfiles.GetCount()
+		L_LVfiles.Colors.Row(A_Index, FileUnion.Files[L_LVfiles.GetText(A_Index,2)].color)
+	L_LVfiles.Opt("+Redraw")
+})
+;单元格颜色设置
+L_LVfiles.Colors := LV_Colors(L_LVfiles)
+L_LVfiles.SetRowColorByPath := (thisLV, path, color) {
+	Loop L_LVfiles.GetCount() {
+		if (L_LVfiles.GetText(A_Index,2) = path) {
+			L_LVfiles.Colors.Row(A_Index, color)
+			L_LVfiles.Opt("+Redraw")
+			break
+		}
+	}
+}
+;加载文件
 LV_LoadFiles(pathArray) {
 	NewFiles := FileUnion.Files.Load(pathArray)
 	if NewFiles.Length = 0
 		return
 	L_LVfiles.Opt("-Redraw")
-	for _, file in NewFiles
+	for _, file in NewFiles {
 		L_LVfiles.Add("Icon" L_LVfiles.LoadFileIcon(file.path), file.name, file.path)
+		L_LVfiles.Colors.RowCount := i := L_LVfiles.GetCount()
+		L_LVfiles.Colors.Row(i, file.color)
+	}
 	L_LVfiles.AdjustColumnsWidth()
 	L_LVfiles.Opt("+Redraw")
 	;EnableBottons(L_LVfiles.GetCount()) ; 控制按钮
 	SB.SetText("文件总数: " FileUnion.files.Count)
 }
+
 
 
 
@@ -198,12 +224,17 @@ L_BTUnion_Click(thisCtrl, Info) {
 			result := (file.type = "excel") ? FileUnion.LoadExcel(file, deepRules) : FileUnion.LoadWord(file, deepRules)
 		} catch {
 		    ProgGui.StepFinsih(0, "文件提取失败")
+			file.color := "red"
 		} else {
-			if result
+			if result {
 				ProgGui.StepFinsih(1, "文件提取成功-" result)
-			else
+				file.color := 0x92D050 ; 绿
+			} else {
 				ProgGui.StepFinsih(0, "文件无法匹配")
-		}
+				file.color := "yellow"
+			}	
+		} 
+		L_LVfiles.SetRowColorByPath(file.path, file.color)
 	}
 	R_LVresult.LoadRecordset()
 	R_LVresult.AdjustColumnsWidth()
@@ -226,7 +257,7 @@ FU_GBresult := MainGui.Add("GroupBox", "Section x" FU_GBfiles_W+10 " ym w" MainG
 MainGui.SetFont("cDefault norm", "微软雅黑")
 
 ;列表
-R_LVresult := MainGui.Add("ListView", "xs+10 ys+20 w" MainGuiWidth-FU_GBfiles_W - 265 " h" MainGuiHeight - 55 " Section Count10000 Grid BackgroundFEFEFE AW AH")
+R_LVresult := MainGui.Add("ListView", "xs+10 ys+20 w" MainGuiWidth-FU_GBfiles_W - 265 " h" MainGuiHeight - 55 " Section Count10000 Grid +LV0x10000 BackgroundFEFEFE AW AH")
 ;从JSON文件加载参数到LV
 R_LVresult.LoadRecordset := (thisLV, FormatStrs := "") {
 	thisLV.Delete()
