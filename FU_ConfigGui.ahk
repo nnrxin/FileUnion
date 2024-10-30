@@ -346,7 +346,7 @@ C_BTclearRule_Click(thisCtrl, Info) {
 
 
 ;提取规则LV
-C_LVrule := ConfigGui.Add("ListView", "xs+10 y+5 w300 h" ConfigGuiHeight - 150 " Grid -ReadOnly +LV0x10000 BackgroundFEFEFE", ["键","值","附加"])
+C_LVrule := ConfigGui.Add("ListView", "xs+10 y+5 w300 h" ConfigGuiHeight - 150 " Grid +LV0x10000 BackgroundFEFEFE", ["键","值","附加"])
 C_LVrule.ModifyCol(1, 90)
 C_LVrule.ModifyCol(2, 130)
 C_LVrule.ModifyCol(3, 76)
@@ -423,7 +423,7 @@ C_TABconfig.UseTab(3)
 
 
 ;处理规则LV
-C_LVprocess := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid -ReadOnly +LV0x10000 BackgroundFEFEFE", ["字段","替换字符","替换为"])
+C_LVprocess := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid +LV0x10000 BackgroundFEFEFE", ["字段","替换字符","替换为"])
 C_LVprocess.ModifyCol(1, 100)
 C_LVprocess.ModifyCol(2, 100)
 C_LVprocess.ModifyCol(3, 96)

@@ -1,8 +1,8 @@
 /**********************************************************************************************************************
  * @description Class LV_InCellEditing      - ListView in-cell editing for AHK v2 - minimal version 
  * @author modified by nnrxin
- * @date 2024/10/14
- * @version 0.0.0
+ * @date 2024/10/30
+ * @version 0.0.1
  * @example:
             LV_OnChange(LV, Row, Col, OldText, NewText) {
                MsgBox "Row: " . Row . "`nCol: " . Col . "`nOldText: " . OldText . "`nNewText: " . NewText
@@ -20,6 +20,7 @@ Class LV_InCellEditing {
       This.CommandFunc := ObjBindMethod(This, "Command")
       LV.OnNotify(-3, This.DoubleClickFunc)
       This.LV := LV
+      this.LV.Opt("+ReadOnly") ; 阻止单击会编辑首行
       This.HWND := LV.Hwnd
       This.Changes := []
       if IsSet(OnChange) && (OnChange is Func)
@@ -55,6 +56,7 @@ Class LV_InCellEditing {
       This.Item := Item       ; 行-1
       This.Subitem := Subitem ; 列-1
       This.LV.OnNotify(-175, This.BeginLabelEditFunc)
+      this.LV.Opt("-ReadOnly") ; 为了下一行能执行
       DllCall("PostMessage", "Ptr", LV.Hwnd, "UInt", 0x1076, "Ptr", Item, "Ptr", 0) ; LVM_EDITLABEL
    }
    ; -------------------------------------------------------------------------------------------------------------------
@@ -92,6 +94,7 @@ Class LV_InCellEditing {
                this.OnChange(This.Item + 1, This.Subitem + 1, This.ItemText, ItemText)
          }
       }
+      this.LV.Opt("+ReadOnly") ; 阻止单击会编辑首行
       Return False
    }
    ; -------------------------------------------------------------------------------------------------------------------
