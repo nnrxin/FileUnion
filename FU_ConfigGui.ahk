@@ -10,8 +10,11 @@ ConfigGui.SetFont("s9", "微软雅黑")
 ;ConfigGui.BackColor := 0xCCE8CF   ;护眼蓝色
 ;GUI关闭
 ConfigGui.OnEvent("Close", (*) {
+	;保存配置
 	C_LVrule.SaveRule()
 	C_LVprocess.SaveRule()
+	SaveAdvancedRules()
+	; 调整主界面的插件并激活主界面
 	L_DDLconfig_Change()
 	MainGui.Opt("-Disabled")
 	WinActivate(MainGui.Hwnd)
@@ -33,6 +36,8 @@ ConfigGui.Update := (*) {
 ;状态栏
 ConfigGui_SB := ConfigGui.Add("StatusBar")
 
+;增加Guitooltip
+ConfigGui.Tips := GuiCtrlTips(ConfigGui)
 
 /************\
 *            *
@@ -68,17 +73,20 @@ C_LVconfigsUpdate(rowI := 0) {
 		ConfigGui_SB.SetText("未选择配置")
 	}
 	;保存前一个配置的规则
-	C_LVrule.SaveRule(C_LVconfigs.SelectedConfig, C_DDLruleIndex.Value)
+	C_LVrule.SaveRule(, C_DDLruleIndex.Value)
 	C_DDLruleIndex.lastValue := C_DDLruleIndex.Value := 1
-	C_LVprocess.SaveRule(C_LVconfigs.SelectedConfig)
-	;加载当前配置的规则
-	C_LVrule.LoadRule(Text)
-	C_LVprocess.LoadRule(Text)
+	C_LVprocess.SaveRule()
+	SaveAdvancedRules()
+	;选择项变化
 	C_LVconfigs.SelectedConfig := Text
+	;加载当前配置的规则
+	C_LVrule.LoadRule()
+	C_LVprocess.LoadRule()
+	LoadAdvancedRules()
 }
 ;控制文件合并规则控件状态
 EnabledGroupBoxRule(s) {
-	C_LVprocess.Enabled := C_BTaddKey2.Enabled := C_BTdeleteKey2.Enabled
+	C_EDnoRepeatFields.Enabled := C_LVprocess.Enabled := C_BTaddKey2.Enabled := C_BTdeleteKey2.Enabled
 	:= C_DDLruleIndex.Enabled := C_BTaddRule.Enabled := C_BTdeleteRule.Enabled := C_BTdefaultRule.Enabled 
 	:= C_BTclearRule.Enabled := C_LVrule.Enabled := C_BTaddKey.Enabled := C_BTdeleteKey.Enabled := s ? true : false
 }
@@ -219,7 +227,7 @@ C_BTDeleteConfig.OnEvent("Click", (thisCtrl, Info) {
 
 ;Group 配置
 ConfigGui.SetFont("c0070DE bold", "微软雅黑")
-C_TABconfig := ConfigGui.Add("Tab3", "x+10 y10 Section w" ConfigGuiWidth - 180 " h" ConfigGuiHeight - 40, ["文件添加","内容提取","内容处理"])
+C_TABconfig := ConfigGui.Add("Tab3", "x+10 y10 Section w" ConfigGuiWidth - 180 " h" ConfigGuiHeight - 40, ["文件添加","内容提取","内容处理","高级"])
 ConfigGui.SetFont("cDefault norm", "微软雅黑")
 C_TABconfig.Value := C_TABconfig.lastValue := 2
 /*
@@ -238,18 +246,20 @@ C_TABconfig.OnEvent("Change", (*) {
 
 
 
-/************\
-*            *
-*     **     *
-*    ***     *
-*     **     *
-*     **     *
-*     **     *
-*     **     *
-*    ****    *
-*    ****    *
-*            *
-\************/
+/***************\
+*               *
+*      ***      *
+*     ****      *
+*    *****      *
+*      ***      *
+*      ***      *
+*      ***      *
+*      ***      *
+*      ***      *
+*   *********   *
+*   *********   *
+*               *
+\***************/
 
 ;文件添加规则
 ;C_TABconfig.UseTab(1)
@@ -258,47 +268,46 @@ C_TABconfig.OnEvent("Change", (*) {
 C_CBFliesNoRepeat := ConfigGui.Add("CheckBox", "xs+10 ys+30 w210 h25", "忽略完全相同的文件")
 C_CBFliesNoRepeat.Value := LOCAL_JSON.Init("C_CBFliesNoRepeat.Value", "1")
 C_CBFliesNoRepeat.ToolTip := "勾选后会忽略文件名和修改日期完全相同的文件"
-C_CBFliesNoRepeat.OnEvent("Click", C_CBFliesNoRepeat_Click)
-C_CBFliesNoRepeat_Click(thisCtrl, Info) {
+C_CBFliesNoRepeat.OnEvent("Click", (thisCtrl, Info) {
 	ConfigGui.Opt("+Disabled")
 	;LV_LoadDir(true)
 	ConfigGui.Opt("-Disabled")
-}
+})
 
 ;设置忽略文件大小小于XX的附件
 C_CBLimitFileSizeKB := ConfigGui.Add("CheckBox", "xp y+0 w140 h25", "忽略文件尺寸(KB)小于")
 C_CBLimitFileSizeKB.Value := LOCAL_JSON.Init("C_CBLimitFileSizeKB.Value", "1")
-C_CBLimitFileSizeKB.OnEvent("Click", C_CBLimitFileSizeKB_Click)
-C_CBLimitFileSizeKB_Click(thisCtrl, Info) {
+C_CBLimitFileSizeKB.OnEvent("Click", (thisCtrl, Info) {
 	ConfigGui.Opt("+Disabled")
 	C_EDLimitFileSizeKB.Enabled := thisCtrl.Value = 1 ? true : false
 	;LV_LoadDir(true)
 	ConfigGui.Opt("-Disabled")
-}
+})
 C_EDLimitFileSizeKB := ConfigGui.Add("Edit", "x+0 yp w65 h25 Center Number Limit6")
 C_EDLimitFileSizeKB.Value := LOCAL_JSON.Init("C_EDLimitFileSizeKB.Value", "1")
-C_EDLimitFileSizeKB.OnEvent("Change", C_EDLimitFileSizeKB_Change)
-C_EDLimitFileSizeKB_Change(thisCtrl, Info) {
+C_EDLimitFileSizeKB.OnEvent("Change", (thisCtrl, Info) {
 	ConfigGui.Opt("+Disabled")
 	;LV_LoadDir(true)
 	ConfigGui.Opt("-Disabled")
-}
+})
 
 
 
 
-/************\
-*            *
-*    ****    *
-*   ******   *
-*   **  **   *
-*      **    *
-*     **     *
-*    **	     *
-*   ******   *
-*   ******   *
-*            *
-\************/
+/***************\
+*               *
+*     *****     *
+*   *********   *
+*   ***   ***   *
+*        ***    *
+*       ***     *
+*      ***      *
+*     ***       *
+*    ***        *
+*   *********   *
+*   *********   *
+*               *
+\***************/
 
 ;内容提取规则
 C_TABconfig.UseTab(2)
@@ -405,18 +414,20 @@ C_BTdeleteKey.OnEvent("Click", (thisCtrl, Info) {
 
 
 
-/************\
-*            *
-*   ******   *
-*   ******   *
-*      **    *
-*     **     *
-*      **    *
-*   **  **	 *
-*   ******   *
-*    ****    *
-*            *
-\************/
+/***************\
+*               *
+*   *********   *
+*   *********   *
+*        ***    *
+*       ***     *
+*      ***      *
+*        ***    *
+*         ***   *
+*   ***   ***   *
+*   *********   *
+*     *****     *
+*               *
+\***************/
 
 ;内容处理规则
 C_TABconfig.UseTab(3)
@@ -479,4 +490,56 @@ C_BTdeleteKey2.OnEvent("Click", (thisCtrl, Info) {
 	for _, RowNumber in selectRows.Reverse()
 		C_LVprocess.Delete(RowNumber)
 })
+
+
+
+/***************\
+*               *
+*         ***   *
+*        ****   *
+*       *****   *
+*      ******   *
+*     *** ***   *
+*    ***  ***   *
+*   *********   *
+*   *********   *
+*         ***   *
+*         ***   *
+*               *
+\***************/
+
+;高级规则
+C_TABconfig.UseTab(4)
+
+;加载当前配置的高级规则
+LoadAdvancedRules(name?) {
+	C_EDnoRepeatFields.Value := ""
+
+	name := name ?? C_LVconfigs.SelectedConfig
+	if !FileUnion.Configs.Has(name)
+		return
+	advanceRules := FileUnion.Configs[name].advanceRules
+
+	C_EDnoRepeatFields.Value := advanceRules.Has("noRepeatFields") ? advanceRules["noRepeatFields"] : ""
+}
+;保存高级规则到当前配置
+SaveAdvancedRules(name?) {
+	name := name ?? C_LVconfigs.SelectedConfig
+	if !FileUnion.Configs.Has(name)
+		return
+	advanceRules := FileUnion.Configs[name].advanceRules
+
+	advanceRules["noRepeatFields"] := C_EDnoRepeatFields.Value
+}
+
+;忽略重复行
+ConfigGui.Add("Text", "xs+10 ys+33 w60 h25 +0x200", "忽略重复项")
+C_EDnoRepeatFields := ConfigGui.Add("Edit", "x+2 yp w240 hp")
+ConfigGui.Tips.SetTip(C_EDnoRepeatFields, "填写用[]括起来字段名,可以是多个的组合")
+C_EDnoRepeatFields.OnEvent("Change", (thisCtrl, Info) {
+	ConfigGui.Opt("+Disabled")
+	;LV_LoadDir(true)
+	ConfigGui.Opt("-Disabled")
+})
+
 

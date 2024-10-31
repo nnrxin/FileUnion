@@ -139,6 +139,7 @@ Class FileUnion {
 			this[name] := this(name)
 			this[name].rules := this[cloneFromName].rules.Clone()
 			this[name].process := this[cloneFromName].process.Clone()
+			this[name].advanceRules := this[cloneFromName].advanceRules.Clone()
 			return this.activeConfig := this[name]
 		}
 		static Switch(name) {
@@ -173,6 +174,9 @@ Class FileUnion {
 			this.name := name
 			this.rules := [[],[],[],[],[],[],[],[],[],[]] ; 预设10个提取规则
 			this.process := [] ; 内容处理规则
+			this.advanceRules := Map(
+				"noRepeatFields", "" ; 不允许重复的字段
+			) ; 高级规则
 		}
 		; 删除
 		__Delete() {
@@ -269,6 +273,14 @@ Class FileUnion {
 				return value
 			}
 		}
+
+		; 获取无重复字段数组
+		GetNoRepeatFields() {
+			noRepeatFields := []
+			for _, v in RegExMatchAll(this.advanceRules["noRepeatFields"], "U)(?<=\[).*(?=\])")
+				noRepeatFields.Push(v[0])
+			return noRepeatFields
+		}
 	}
 
 
@@ -290,8 +302,8 @@ Class FileUnion {
 		static FormatStrs := []
 		static FieldIndex(FieldName) => this.FieldNames.IndexOf(FieldName)   ; 获取字段序号
 		static FieldName(i) => this.FieldNames[i]                            ; 获取字段名称
-		static RowCount() => this.Rows.Length                                ; 获取行数
-		static ColumnCount() => this.FieldNames.Length                       ; 获取列数
+		static RowCount => this.Rows.Length                                  ; 获取行数
+		static ColumnCount => this.FieldNames.Length                         ; 获取列数
 
 		; 新增数据
 		static Add(value*) {
@@ -312,6 +324,30 @@ Class FileUnion {
 		static AddField(name) {
 			this.FieldNames.push(name)
 			return this.FieldNames.Length
+		}
+
+		; 删除重复行,输入为字段名数组,返回删除的行数量
+		static DeleteRepeatRow(noRepeatFields) {
+			;确定不重复的字段序号
+			noRepeatFieldIndexs := []
+			for i, fieldName in this.FieldNames
+				if noRepeatFields.indexOf(fieldName)
+				    noRepeatFieldIndexs.Push(i)
+			if noRepeatFieldIndexs.Length = 0
+				return 0
+			;开始倒着删除重复信息
+			exists := Map()
+			Loop CountBefore := i := this.RowCount {
+				str := ""
+				for _, index in noRepeatFieldIndexs
+					str .= this.Rows[i][index] "@@"
+				if exists.Has(str)
+				    this.Rows.RemoveAt(i)
+				else
+					exists[str] := true
+				i--
+			}
+			return CountBefore - this.RowCount
 		}
 	}
 
@@ -405,7 +441,7 @@ Class FileUnion {
 					continue
 				;开始添加一条信息
 				row := []
-				row.Length := this.Data.ColumnCount()
+				row.Length := this.Data.ColumnCount
 				for Index, value in fixedFields ; 固定
 					row[Index] := value
 				for Index, field in loopedFields {  ; 循环
@@ -481,7 +517,7 @@ Class FileUnion {
 					continue
 				;开始添加一条信息
 				row := []
-				row.Length := this.Data.ColumnCount()
+				row.Length := this.Data.ColumnCount
 				for Index, value in fixedFields ; 固定
 					row[Index] := value
 				for Index, field in loopedFields {  ; 循环

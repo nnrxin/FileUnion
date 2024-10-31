@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.1.3"
+APP_VERSION   := "0.1.4"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -236,6 +236,7 @@ L_BTUnion_Click(thisCtrl, Info) {
 		} 
 		L_LVfiles.SetRowColorByPath(file.path, file.color)
 	}
+	FileUnion.Data.DeleteRepeatRow(G.ActiveConfig.GetNoRepeatFields()) ; 删除重复行
 	R_LVresult.LoadRecordset()
 	R_LVresult.AdjustColumnsWidth()
 	ProgGui.Finsih()
