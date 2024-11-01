@@ -1,17 +1,21 @@
 /**********************************************************************************************************************
  * @description Class LV_InCellEditing      - ListView in-cell editing for AHK v2 - minimal version 
  * @author modified by nnrxin
- * @date 2024/10/30
- * @version 0.0.1
+ * @date 2024/11/01
+ * @version 0.0.2
  * @example:
-            LV_OnChange(LV, Row, Col, OldText, NewText) {
+            LV_OnChange(this, Row, Col, OldText, NewText) {
                MsgBox "Row: " . Row . "`nCol: " . Col . "`nOldText: " . OldText . "`nNewText: " . NewText
             }
-            LVICE := LV_InCellEditing(LV, LV_OnChange)
+            LVICE := LV_InCellEditing(LV, [1,2,3], LV_OnChange)
  **********************************************************************************************************************/
 Class LV_InCellEditing {
-   ; -------------------------------------------------------------------------------------------------------------------
-   __New(LV, OnChange?) {
+   /**
+    * @param LV          - ListView object
+    * @param columns     - column index list that can be edited
+    * @param OnChange    - callback function when cell value is changed
+    */
+   __New(LV, columns?, OnChange?) {
       If (Type(LV) != "Gui.ListView")
          Throw Error("Class LVICE requires a GuiControl object of type Gui.ListView!")
       This.DoubleClickFunc := ObjBindMethod(This, "DoubleClick")
@@ -23,6 +27,8 @@ Class LV_InCellEditing {
       this.LV.Opt("+ReadOnly") ; 阻止单击会编辑首行
       This.HWND := LV.Hwnd
       This.Changes := []
+      if IsSet(Columns) && (Columns is Array)
+         this.columns := columns
       if IsSet(OnChange) && (OnChange is Func)
          This.OnChange := OnChange
    }
@@ -42,6 +48,8 @@ Class LV_InCellEditing {
       Critical -1
       Item := NumGet(L + (A_PtrSize * 3), 0, "Int")
       Subitem := NumGet(L + (A_PtrSize * 3), 4, "Int")
+      if this.HasProp("columns") && !this.columns.IndexOf(Subitem + 1) ; 跳过不可编辑列
+         return
       CellText := LV.GetText(Item + 1, SubItem + 1)
       RC := Buffer(16, 0)
       NumPut("Int", 0, "Int", SubItem, RC)
@@ -89,7 +97,7 @@ Class LV_InCellEditing {
          If (ItemText != This.ItemText) {
             LV.Modify(This.Item + 1, "Col" . (This.Subitem + 1), ItemText)
             This.Changes.Push({Row: This.Item + 1, Col: This.Subitem + 1, OldText: This.ItemText, NewText: ItemText})
-            ;编辑结束后执行函数OnChange(LV, Row, Col, OldText, NewText)
+            ;编辑结束后执行函数OnChange(this, Row, Col, OldText, NewText)
             if this.HasMethod("OnChange")
                this.OnChange(This.Item + 1, This.Subitem + 1, This.ItemText, ItemText)
          }

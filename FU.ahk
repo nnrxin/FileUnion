@@ -4,7 +4,7 @@
 ;=======================================================================================================================
 
 ;基础参数设置
-#Requires AutoHotkey v2.0
+#Requires AutoHotkey v2.1-alpha.14
 #NoTrayIcon               ;无托盘图标
 #SingleInstance Ignore    ;不能双开
 KeyHistory 0
@@ -132,12 +132,21 @@ L_BTsetConfig.OnEvent("Click", (*) {
 })
 
 ;文件列表
-L_LVfiles := MainGui.Add("ListView", "xs y+5 w250 h" MainGuiHeight-180 " Grid AltSubmit +LV0x10000 BackgroundFEFEFE AH", ["文件名","路径"])
+L_LVfiles := MainGui.Add("ListView", "xs y+5 w250 h" MainGuiHeight-180 " Grid AltSubmit -LV0x10 +LV0x10000 BackgroundFEFEFE AH", ["文件名","路径"])
+;双击行打开文件
 L_LVfiles.OnEvent("DoubleClick", (thisLV, rowI) {
 	if !rowI || !FileExist(path := thisLV.GetText(rowI,2))
 		return
 	Run path
 })
+;列表选择项目变化时显示文件信息
+L_LVfiles.OnEvent("ItemSelect", (thisLV, Item, Selected) {
+	rowI := thisLV.GetNext()
+	if rowI && Item != rowI
+		return
+	SB.SetText(thisLV.GetText(rowI,2))
+})
+;点击标题行,重新上色
 L_LVfiles.OnEvent("ColClick", (*) {
 	L_LVfiles.Opt("-Redraw")
 	Loop L_LVfiles.GetCount()
@@ -170,6 +179,7 @@ LV_LoadFiles(pathArray) {
 	L_LVfiles.Opt("+Redraw")
 	;EnableBottons(L_LVfiles.GetCount()) ; 控制按钮
 	SB.SetText("文件总数: " FileUnion.files.Count)
+	FU_GBfiles.Text := "待合并 ( 文件数 : " FileUnion.files.Count " )"
 }
 
 
@@ -203,6 +213,7 @@ L_BTclearFiles.OnEvent("Click", (*) {
 	L_LVfiles.Opt("+Redraw")
 	;EnableBottons(LV.GetCount()) ; 控制按钮
 	SB.SetText("清空文件列表")
+	FU_GBfiles.Text := "待合并 ( 文件数 : 0 )"
 })
 
 
@@ -214,7 +225,7 @@ L_BTUnion.OnEvent("Click", L_BTUnion_Click)
 L_BTUnion_Click(thisCtrl, Info) {
 	MainGui.Opt("+Disabled")
 
-	SB.SetText("开始提取文件内容", 2)
+	SB.SetText("开始提取文件内容")
 	FileUnion.Data.Clear()
 	deepRules := G.ActiveConfig.ConvertToDeep()
 	ProgGui.Start(FileUnion.Files.Count)
@@ -240,7 +251,8 @@ L_BTUnion_Click(thisCtrl, Info) {
 	R_LVresult.LoadRecordset()
 	R_LVresult.AdjustColumnsWidth()
 	ProgGui.Finsih()
-	SB.SetText("总 " R_LVresult.GetCount() " 行", 2)
+	SB.SetText("总 " R_LVresult.GetCount() " 行")
+	FU_GBresult.Text := "合并结果 ( 行数 : " R_LVresult.GetCount() " )"
 
 	MainGui.Opt("-Disabled")
 }
@@ -258,7 +270,7 @@ FU_GBresult := MainGui.Add("GroupBox", "Section x" FU_GBfiles_W+10 " ym w" MainG
 MainGui.SetFont("cDefault norm", "微软雅黑")
 
 ;列表
-R_LVresult := MainGui.Add("ListView", "xs+10 ys+20 w" MainGuiWidth-FU_GBfiles_W - 265 " h" MainGuiHeight - 55 " Section Count10000 Grid +LV0x10000 BackgroundFEFEFE AW AH")
+R_LVresult := MainGui.Add("ListView", "xs+10 ys+20 w" MainGuiWidth-FU_GBfiles_W - 265 " h" MainGuiHeight - 55 " Section Count10000 Grid -LV0x10 +LV0x10000 BackgroundFEFEFE AW AH")
 ;从JSON文件加载参数到LV
 R_LVresult.LoadRecordset := (thisLV, FormatStrs := "") {
 	thisLV.Delete()
@@ -352,9 +364,7 @@ R_BTexport_Click(thisCtrl, Info) {
 
 ;状态栏
 SB := MainGui.Add("StatusBar",, "")
-SB.SetFont("bold italic")
-SB.SetParts(FU_GBfiles_W + 7) ; 按左右分区
-
+SB.SetFont("bold italic") ; 粗体、斜体
 
 ;监听鼠标左键事件
 OnMessage(0x0201, On_WM_LBUTTONDOWN)

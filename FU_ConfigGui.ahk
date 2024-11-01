@@ -35,6 +35,7 @@ ConfigGui.Update := (*) {
 
 ;状态栏
 ConfigGui_SB := ConfigGui.Add("StatusBar")
+ConfigGui_SB.SetFont("bold italic") ; 粗体、斜体
 
 ;增加Guitooltip
 ConfigGui.Tips := GuiCtrlTips(ConfigGui)
@@ -54,6 +55,20 @@ ConfigGui.Tips := GuiCtrlTips(ConfigGui)
 
 ; 配置列表
 C_LVconfigs := ConfigGui.Add("ListView", "xm+10 ym+10 w150 h" ConfigGuiHeight - 70 " Grid -Multi +LV0x10000 BackgroundFEFEFE", ["配置"])
+;双击LV单元格可编辑,编辑后有变化则执行重命名函数
+LV_InCellEditing(C_LVconfigs,, (this, Row, Col, OldText, NewText) {
+	ConfigGui_SB.SetText("")
+	if FileUnion.Configs.Has(NewText) {
+		this.LV.Modify(Row, "col" Col, OldText)
+		return ConfigGui_SB.SetText('重命名失败: 配置"' NewText '"已存在')
+	}
+	if FileUnion.Configs.ReName(OldText, NewText) {
+		this.LV.Modify(Row, "col" Col, OldText)
+		return ConfigGui_SB.SetText('重命名失败: 配置"' OldText '"重命名失败')
+	}
+	L_DDLconfig.Update(FileUnion.Configs.instances, NewText)
+	ConfigGui_SB.SetText('配置"' OldText '"重命名为: "' NewText '"')
+})
 ;列表选择项目变化
 C_LVconfigs.SelectedConfig := ""
 C_LVconfigs.OnEvent("ItemSelect", (thisLV, Item, Selected) {
@@ -96,8 +111,6 @@ C_LVconfigs.OnEvent("ContextMenu", (thisLV, rowI, IsRightClick, X, Y) {
 	if !IsSet(MyMenu) {
 		static MyMenu := Menu()
 		MyMenu.rowI := 0
-		MyMenu.Add("重命名", MyMenu_Call)
-		;MyMenu.SetIcon("1&", "HICON:" hBitMaps[3])    ;word
 		MyMenu.Add("复制配置", MyMenu_Call)
 		MyMenu.Add("删除配置", MyMenu_Call)
 		MyMenu.Add()
@@ -107,13 +120,11 @@ C_LVconfigs.OnEvent("ContextMenu", (thisLV, rowI, IsRightClick, X, Y) {
 		MyMenu_Call(ItemName, ItemPos, MyMenu) {
 			switch ItemPos
 			{
-			case 1: 
-				C_LVconfigs.RenameConfig(MyMenu.rowI)
-			case 2:
+			case 1:
 				C_LVconfigs.CopyConfig(MyMenu.rowI)
-			case 3:
+			case 2:
 				C_LVconfigs.DeleteConfig(MyMenu.rowI)
-			case 5:
+			case 4:
 				C_LVconfigs.AddConfig()
 			}
 		}
@@ -170,22 +181,6 @@ C_LVconfigs.DeleteConfig := (thisLV, RowNumber?) {
 	L_DDLconfig.Update(FileUnion.Configs.instances)
 	C_LVconfigsUpdate(0)
 	ConfigGui_SB.SetText("配置已删除: " OldText)
-}
-;重命名配置
-C_LVconfigs.RenameConfig := (thisLV, RowNumber) {
-	ConfigGui_SB.SetText("")
-	text := thisLV.GetText(RowNumber)
-	ConfigGui.Opt("+OwnDialogs")
-	IB := InputBox("输入一个新的配置名称:", "配置重命名", "w250 h100", text)
-	if IB.Result = "OK" &&  IB.Value != "" && IB.Value != text {
-		if FileUnion.Configs.Has(IB.Value)
-			return ConfigGui_SB.SetText('重命名失败: 配置"' IB.Value '"已存在')
-		if FileUnion.Configs.ReName(text, IB.Value)
-			return ConfigGui_SB.SetText('重命名失败: 配置文件"' IB.Value '"重命名失败')
-		L_DDLconfig.Update(FileUnion.Configs.instances, IB.Value)
-		thisLV.Modify(RowNumber,, IB.Value)
-		ConfigGui_SB.SetText("配置重命名为: " IB.Value)
-	}
 }
 ;复制配置
 C_LVconfigs.CopyConfig := (thisLV, RowNumber) {
@@ -355,12 +350,12 @@ C_BTclearRule_Click(thisCtrl, Info) {
 
 
 ;提取规则LV
-C_LVrule := ConfigGui.Add("ListView", "xs+10 y+5 w300 h" ConfigGuiHeight - 150 " Grid +LV0x10000 BackgroundFEFEFE", ["键","值","附加"])
+C_LVrule := ConfigGui.Add("ListView", "xs+10 y+5 w300 h" ConfigGuiHeight - 150 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["键","值","附加"])
 C_LVrule.ModifyCol(1, 90)
 C_LVrule.ModifyCol(2, 130)
 C_LVrule.ModifyCol(3, 76)
 ;LV单元格可编辑,编辑后执行函数
-LV_InCellEditing(C_LVrule, (thisLV, Row, Col, OldText, NewText) {
+LV_InCellEditing(C_LVrule,, (thisLV, Row, Col, OldText, NewText) {
 	;有变化则进行动作
 })
 ;点选项目触发动作
@@ -434,12 +429,12 @@ C_TABconfig.UseTab(3)
 
 
 ;处理规则LV
-C_LVprocess := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid +LV0x10000 BackgroundFEFEFE", ["字段","替换字符","替换为"])
+C_LVprocess := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["字段","替换字符","替换为"])
 C_LVprocess.ModifyCol(1, 100)
 C_LVprocess.ModifyCol(2, 100)
 C_LVprocess.ModifyCol(3, 96)
 ;LV单元格可编辑,编辑后执行函数
-LV_InCellEditing(C_LVprocess, (thisLV, Row, Col, OldText, NewText) {
+LV_InCellEditing(C_LVprocess,, (thisLV, Row, Col, OldText, NewText) {
 	;有变化则进行动作
 })
 ;点选项目触发动作
