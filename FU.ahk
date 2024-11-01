@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.1.4"
+APP_VERSION   := "0.1.5"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -366,7 +366,9 @@ R_BTexport_Click(thisCtrl, Info) {
 SB := MainGui.Add("StatusBar",, "")
 SB.SetFont("bold italic") ; 粗体、斜体
 
-;监听鼠标左键事件
+
+/*
+;监听鼠标左键事件 
 OnMessage(0x0201, On_WM_LBUTTONDOWN)
 On_WM_LBUTTONDOWN(wParam, lParam, msg, hwnd) {
 	if CurrCtrl := GuiCtrlFromHwnd(hwnd) {
@@ -374,15 +376,26 @@ On_WM_LBUTTONDOWN(wParam, lParam, msg, hwnd) {
 			SetTimer () => CurrCtrl.On_WM_LBUTTONDOWN_10(), -10
 	}
 }
+*/
 
+/*
 ;GUI菜单
 MainGui.OnEvent("ContextMenu", (GuiObj, GuiCtrlObj, Item, IsRightClick, X, Y) {
 	;右键某控件上
 	if IsRightClick and GuiCtrlObj and GuiCtrlObj.HasMethod("ContextMenu")
 		GuiCtrlObj.ContextMenu(Item, X, Y)
 })
+*/
 
-;GUI文件拖放
+/*
+; 删除快捷键
+#HotIf (WinActive("ahk_id " MainGui.Hwnd))
+Delete:: {
+	MsgBox 1
+}
+*/
+
+; GUI文件拖放
 MainGui.OnEvent("DropFiles", (GuiObj, GuiCtrlObj, FileArray, X, Y) {
 	MainGui.Opt("+Disabled")
 	;主界面上的拖动
@@ -398,15 +411,15 @@ MainGui.OnEvent("DropFiles", (GuiObj, GuiCtrlObj, FileArray, X, Y) {
 	MainGui.Opt("-Disabled")
 })
 
-;改变GUI尺寸时调整控件
+; 改变GUI尺寸时调整控件
 MainGui.OnEvent("Size", (thisGui, MinMax, W, H) {
 	R_LVresult.AdjustColumnsWidth()
 })
 
-;GUI关闭
+; GUI关闭
 MainGui.OnEvent("Close", (*) => ExitApp())
 
-;退出APP前运行
+; 退出APP前运行
 OnExit (*) {
 	MainGui.Hide()
 
@@ -419,7 +432,7 @@ OnExit (*) {
 
 
 
-;初始化
+; 初始化
 MainGui.Init := (thisGui) {
 	thisGui.Opt("+Disabled")
 
@@ -436,7 +449,7 @@ MainGui.Init := (thisGui) {
 MainGui.Init()
 
 
-;GUI显示
+; GUI显示
 dpiRate := 96 / A_ScreenDPI
 MainGui.Show("hide Center w" SysGet(16) * dpiRate " h" SysGet(17) * dpiRate)
 guiSizeRate := 0.9 * dpiRate

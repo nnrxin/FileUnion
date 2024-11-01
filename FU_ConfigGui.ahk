@@ -40,6 +40,8 @@ ConfigGui_SB.SetFont("bold italic") ; 粗体、斜体
 ;增加Guitooltip
 ConfigGui.Tips := GuiCtrlTips(ConfigGui)
 
+
+
 /************\
 *            *
 *    ****    *
@@ -70,11 +72,13 @@ LV_InCellEditing(C_LVconfigs,, (this, Row, Col, OldText, NewText) {
 	ConfigGui_SB.SetText('配置"' OldText '"重命名为: "' NewText '"')
 })
 ;列表选择项目变化
+C_LVconfigs.SelectedRow := 0
 C_LVconfigs.SelectedConfig := ""
 C_LVconfigs.OnEvent("ItemSelect", (thisLV, Item, Selected) {
 	rowI := thisLV.GetNext()
 	if rowI && Item != rowI
 		return
+	C_LVconfigs.SelectedRow := rowI
 	C_LVconfigsUpdate(rowI)
 })
 C_LVconfigsUpdate(rowI := 0) {
@@ -173,7 +177,7 @@ C_LVconfigs.AddConfig := (thisLV) {
 ;删除配置
 C_LVconfigs.DeleteConfig := (thisLV, RowNumber?) {
 	ConfigGui_SB.SetText("")
-	RowNumber := RowNumber ?? thisLV.GetNext()
+	RowNumber := RowNumber ?? C_LVconfigs.SelectedRow
 	if RowNumber = 0
 		return
 	FileUnion.Configs.Delete(OldText := thisLV.GetText(RowNumber))
@@ -205,14 +209,10 @@ EnabledConfigButtons(configNameExist) {
 }
 ;按钮-新建配置
 C_BTAddConfig := ConfigGui.Add("Button", "xp y+4 w73 h26", "新建配置")
-C_BTAddConfig.OnEvent("Click", (*) {
-	C_LVconfigs.AddConfig()
-})
+C_BTAddConfig.OnEvent("Click", (*) => C_LVconfigs.AddConfig())
 ;按钮-删除配置
 C_BTDeleteConfig := ConfigGui.Add("Button", "x+1 yp wp hp", "删除配置")
-C_BTDeleteConfig.OnEvent("Click", (thisCtrl, Info) {
-	C_LVconfigs.DeleteConfig()
-})
+C_BTDeleteConfig.OnEvent("Click", (*) => C_LVconfigs.DeleteConfig())
 
 
 
@@ -238,7 +238,6 @@ C_TABconfig.OnEvent("Change", (*) {
 	C_TABconfig.lastValue := C_TABconfig.Value
 })
 */
-
 
 
 /***************\
@@ -381,31 +380,43 @@ C_LVrule.SaveRule := (thisLV, name?, i?) {
 	Loop thisLV.GetCount()
 		rule.push([thisLV.GetText(A_Index,1), thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
 }
+;新增键
+LVAddKey(thisLV, RowNumber?) {
+	if !(IsSet(RowNumber) && IsInteger(RowNumber) && RowNumber > 0 && RowNumber <= thisLV.GetCount())
+		RowNumber := thisLV.GetNext(0) || thisLV.GetCount() + 1 ; 优先插入到选中行下方，否则插入到最后一行
+	RowNumber := thisLV.Insert(RowNumber,, "key" RowNumber, "value" RowNumber)
+	thisLV.Focus()
+	thisLV.Modify(0, "-Select")          ;全部取消选中
+	thisLV.Modify(RowNumber, "Select")   ;选中
+	thisLV.Modify(RowNumber, "Vis")      ;可见
+}
+;删除键
+LVDeleteKey(thisLV, Rows?) {
+	if IsSet(Rows) && Rows is Array {
+		for _, RowNumber in Rows.Sort((a, b) => b - a) ; 倒序
+			if IsInteger(RowNumber) && RowNumber > 0 && RowNumber <= thisLV.GetCount()
+				thisLV.Delete(RowNumber)
+	} else {
+		selectRows := []
+		RowNumber := 0  ; 这样使得首次循环从列表的顶部开始搜索.
+		Loop {
+			RowNumber := thisLV.GetNext(RowNumber)  ; 在前一次找到的位置后继续搜索.
+			if not RowNumber  ; 上面返回零, 所以选择的行已经都找到了.
+				break
+			selectRows.Push(RowNumber)
+		}
+		for _, RowNumber in selectRows.Reverse()
+			thisLV.Delete(RowNumber)
+	}
+}
 
 ;添加按钮
 C_BTaddKey := ConfigGui.Add("Button", "xs+10 y+5 w147 h35", "添加参数")
-C_BTaddKey.OnEvent("Click", (thisCtrl, Info) {
-	RowNumber := C_LVrule.GetNext(0) || C_LVrule.GetCount() + 1 ; 优先插入到选中行下方，否则插入到最后一行
-	RowNumber := C_LVrule.Insert(RowNumber,, "key" RowNumber, "value" RowNumber)
-	C_LVrule.Focus()
-	C_LVrule.Modify(0, "-Select")          ;全部取消选中
-	C_LVrule.Modify(RowNumber, "Select")   ;选中
-	C_LVrule.Modify(RowNumber, "Vis")      ;可见
-})
+C_BTaddKey.OnEvent("Click", (*) => LVAddKey(C_LVrule))
 ;删除按钮
 C_BTdeleteKey := ConfigGui.Add("Button", "x+5 yp wp hp", "删除参数")
-C_BTdeleteKey.OnEvent("Click", (thisCtrl, Info) {
-	selectRows := []
-	RowNumber := 0  ; 这样使得首次循环从列表的顶部开始搜索.
-	Loop {
-		RowNumber := C_LVrule.GetNext(RowNumber)  ; 在前一次找到的位置后继续搜索.
-		if not RowNumber  ; 上面返回零, 所以选择的行已经都找到了.
-			break
-		selectRows.Push(RowNumber)
-	}
-	for _, RowNumber in selectRows.Reverse()
-		C_LVrule.Delete(RowNumber)
-})
+C_BTdeleteKey.OnEvent("Click", (*) => LVDeleteKey(C_LVrule))
+
 
 
 
@@ -463,28 +474,10 @@ C_LVprocess.SaveRule := (thisLV, name?) {
 
 ;添加按钮
 C_BTaddKey2 := ConfigGui.Add("Button", "xs+10 y+5 w147 h35", "添加参数")
-C_BTaddKey2.OnEvent("Click", (thisCtrl, Info) {
-	RowNumber := C_LVprocess.GetNext(0) || C_LVprocess.GetCount() + 1 ; 优先插入到选中行下方，否则插入到最后一行
-	RowNumber := C_LVprocess.Insert(RowNumber,, "key" RowNumber, "value" RowNumber)
-	C_LVprocess.Focus()
-	C_LVprocess.Modify(0, "-Select")          ;全部取消选中
-	C_LVprocess.Modify(RowNumber, "Select")   ;选中
-	C_LVprocess.Modify(RowNumber, "Vis")      ;可见
-})
+C_BTaddKey2.OnEvent("Click", (*) => LVAddKey(C_LVprocess))
 ;删除按钮
 C_BTdeleteKey2 := ConfigGui.Add("Button", "x+5 yp wp hp", "删除参数")
-C_BTdeleteKey2.OnEvent("Click", (thisCtrl, Info) {
-	selectRows := []
-	RowNumber := 0  ; 这样使得首次循环从列表的顶部开始搜索.
-	Loop {
-		RowNumber := C_LVprocess.GetNext(RowNumber)  ; 在前一次找到的位置后继续搜索.
-		if not RowNumber  ; 上面返回零, 所以选择的行已经都找到了.
-			break
-		selectRows.Push(RowNumber)
-	}
-	for _, RowNumber in selectRows.Reverse()
-		C_LVprocess.Delete(RowNumber)
-})
+C_BTdeleteKey2.OnEvent("Click", (*) => LVDeleteKey(C_LVprocess))
 
 
 
@@ -538,3 +531,47 @@ C_EDnoRepeatFields.OnEvent("Change", (thisCtrl, Info) {
 })
 
 
+
+/***************\
+*****************
+*****************
+*****************
+*****************
+*****************
+*****************
+*****************
+*****************
+*****************
+*****************
+*****************
+*****************
+\***************/
+
+;=========================
+;热键
+;=========================
+#HotIf (WinActive("ahk_id " ConfigGui.Hwnd))
+;插入
+Insert:: {
+	Switch ConfigGui.FocusedCtrl
+	{
+	case C_LVconfigs:
+		C_LVconfigs.AddConfig()
+	case C_LVrule:
+		LVAddKey(C_LVrule)
+	case C_LVprocess:
+		LVAddKey(C_LVprocess)
+	}
+}
+;删除
+Delete:: {
+	Switch ConfigGui.FocusedCtrl
+	{
+	case C_LVconfigs:
+		C_LVconfigs.DeleteConfig()
+	case C_LVrule:
+		LVDeleteKey(C_LVrule)
+	case C_LVprocess:
+		LVDeleteKey(C_LVprocess)
+	}
+}
