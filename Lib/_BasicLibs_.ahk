@@ -8,13 +8,11 @@
 
 ;GUI及控件的增强
 #Include GUI\GuiCtrlTips.ahk ; Gui控件的tooltip提示
-#Include GUI\Gui_Resizer.ahk ; Gui尺寸调整
 #Include GUI\Gui_StatusBar.ahk ; 状态栏增强
 #Include GUI\Gui_DDL.ahk ; 下拉框增强
 #Include GUI\Gui_ComboBox.ahk ; 组合框增强
 #Include GUI\Gui_ListView.ahk ; 图标视图增强
 #Include GUI\Gui_Edit.ahk ; 编辑框增强
-#Include GUI\Class_LVICE_XXS.ahk ; LV单元格内编辑
 #Include GUI\Class_LV_InCellEditing.ahk ; LV单元格内编辑改进版
 #Include GUI\Class_LV_Colors.ahk ; LV单元格颜色
 #Include GUI\ProgressInStatusBar.ahk ; LV状态栏进度条

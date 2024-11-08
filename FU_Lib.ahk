@@ -84,7 +84,7 @@ Class FileUnion {
 
 		; 静态参数
 		static defaultRule := [
-			["表序号"     , "1"                          , ""      ],
+			["表序号"     , ""                           , ""      ],
 			["表名称"     , ""                           , ""      ],
 			["2,1"        , "(日期|date)"                , ""      ],
 			["3,4"        , "(项目编号|item No)"         , ""      ],
@@ -239,11 +239,11 @@ Class FileUnion {
 					}
 				}
 				;补全必要参数
-				deepRule.tableIndex := deepRule.HasProp("tableIndex") ? deepRule.tableIndex : 1
-				deepRule.inculdeHidenTable := deepRule.HasProp("inculdeHidenTable") ? deepRule.inculdeHidenTable : ""
-				deepRule.startRow := deepRule.HasProp("startRow") ? deepRule.startRow : 1
-				deepRule.endCheckColumn := deepRule.HasProp("endCheckColumn") ? deepRule.endCheckColumn : 1
-				deepRule.endCheckMaxCount := deepRule.HasProp("endCheckMaxCount") ? deepRule.endCheckMaxCount : 0
+				deepRule.tableIndex := deepRule.tableIndex ?? ""
+				deepRule.inculdeHidenTable := deepRule.inculdeHidenTable ?? ""
+				deepRule.startRow := deepRule.startRow ?? 1
+				deepRule.endCheckColumn := deepRule.endCheckColumn ?? 1
+				deepRule.endCheckMaxCount := deepRule.endCheckMaxCount ?? 0
 				;添加配置内容处理规则
 				FieldIndex := Map()
 				for i, field in deepRule.fields {
@@ -382,9 +382,11 @@ Class FileUnion {
 		}
 		;按规则获取文件内容
 		for cfgI, deepRule in deepRules {
-			;尝试获取表,优先使用姓名,使用序号时会跳过
+			;尝试获取表,优先使用姓名,序号为空或0时使用当前活动表,最后使用序号时会跳过
 			if deepRule.HasProp("tableName") && sheetNames.IndexOf(deepRule.tableName)
 				sheetName := deepRule.tableName
+			else if !deepRule.tableIndex
+				sheetName := book.activeSheet()
 			else {
 				sheetName := deepRule.tableIndex-1
 				;跳过隐藏表
