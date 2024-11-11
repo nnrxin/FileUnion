@@ -24,4 +24,4 @@
 ;字符串相关
 #Include RegExMatchAll.ahk ; 正则表达式匹配所有
 #Include String\StringFuctions.ahk ; 字符串增强函数集合
-#Include String\GetTimeYYYYMMDD.ahk ; 获取固定格式的日期
+#Include String\GetDateYYYYMMDD.ahk ; 获取固定格式的日期

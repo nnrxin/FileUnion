@@ -1,35 +1,12 @@
-﻿; 转化成标准时间 20210129 = 2021年1月29日
-; 2021.01.29 > 20210129
-; 2021.1.29 > 20210129
-; 2021/1/29 > 20210129
-; 2021/01/29 > 20210129
-; 2021-1-29 > 20210129
-; 2021-01-29 > 20210129
-GetTimeYYYYMMDD(date, sep?) {
-	dots := []
-	dots.push({str:"/", strRegEx:"/"})
-	dots.push({str:".", strRegEx:"\."})
-	dots.push({str:"-", strRegEx:"-"})
-	for i, dot in dots {
-		;检测格式是否匹配
-		if RegExMatch(date, "^\d{4}" dot.strRegEx "\d{1,2}" dot.strRegEx "\d{1,2}$") {    ;2021/1/29
-			year := SubStr(date, 1, 4)
-
-			secondPos := InStr(date, dot.str, false, -1)
-			if (secondPos = 7)
-				month := "0" SubStr(date, 6, 1)
-			else
-				month := SubStr(date, 6, 2)
-
-			if (StrLen(date) - secondPos = 1)
-				day := "0" SubStr(date, secondPos + 1)
-			else
-				day := SubStr(date, secondPos + 1)
-
-			return IsSet(sep) ? (year . sep . month . sep . day) : (year . month . day)
-		}
-	}
-	return
+﻿/**
+ * 从字符串中提取出日期, 转化成特定格式的时间字符串, 未提取到时返回""
+ * @param {String} str 含有特定格式的日期的字符串
+ * @param {String} sep Format的格式字符串, 其中年为{1}, 月为{2}, 日为{3}
+ * @returns {String}   指定格式的时间字符串
+ */
+GetDateYYYYMMDD(str, FormatStr := "{1:04}{2:02}{3:02}") {
+	if RegExMatch(str, "(\d{2}|\d{4})[-/\.](\d{1,2})[-/\.](\d{1,2})", &SubPat)
+        return Format(FormatStr, (StrLen(SubPat[1]) = 2 ? "20" SubPat[1] : SubPat[1]), SubPat[2], SubPat[3])
 }
 
 
