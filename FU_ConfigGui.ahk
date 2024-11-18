@@ -2,30 +2,33 @@
 
 ;创建配置GUI
 ConfigGuiWidth := 500, ConfigGuiHeight := 600
-ConfigGui := Gui("-MaximizeBox -MinimizeBox", APP_NAME_CN "-配置")
+ConfigGui := Gui("-MaximizeBox -MinimizeBox +AlwaysOnTop", APP_NAME_CN "-配置")
 ;ConfigGui.Opt("+Owner")
 ConfigGui.Show("hide w" ConfigGuiWidth " h" ConfigGuiHeight)
 ConfigGui.MarginX := ConfigGui.MarginY := 0
 ConfigGui.SetFont("s9", "微软雅黑")
 ;ConfigGui.BackColor := 0xCCE8CF   ;护眼蓝色
 ;GUI关闭
-ConfigGui.OnEvent("Close", (*) {
+ConfigGui.OnEvent("Close", ConfigGui_Close)
+ConfigGui_Close(*) {
+	ConfigGui.Hide()
 	;保存配置
-	C_LVrule.SaveRule()
-	C_LVprocess.SaveRule()
+	C1_LV.SaveRule()
+	C2_LV.SaveRule()
+	C3_LV.SaveRule()
 	SaveAdvancedRules()
 	; 调整主界面的插件并激活主界面
 	L_DDLconfig_Change()
-	MainGui.Opt("-Disabled")
+	;MainGui.Opt("-Disabled")
 	WinActivate(MainGui.Hwnd)
-})
+}
 ;GUI界面刷新
 ConfigGui.Update := (*) {
-	C_LVconfigs.Update()
+	C_LV.Update()
 	RowI := 0
-	Loop C_LVconfigs.GetCount() {
-		if L_DDLconfig.Text = C_LVconfigs.GetText(A_Index) {
-			C_LVconfigs.Modify(A_Index, "+Select +focus")
+	Loop C_LV.GetCount() {
+		if L_DDLconfig.Text = C_LV.GetText(A_Index) {
+			C_LV.Modify(A_Index, "+Select +focus")
 			RowI := A_Index
 			break
 		}	
@@ -56,9 +59,9 @@ ConfigGui.Tips := GuiCtrlTips(ConfigGui)
 \************/
 
 ; 配置列表
-C_LVconfigs := ConfigGui.Add("ListView", "xm+10 ym+10 w150 h" ConfigGuiHeight - 70 " Grid -Multi +LV0x10000 BackgroundFEFEFE", ["配置"])
+C_LV := ConfigGui.Add("ListView", "xm+10 ym+10 w150 h" ConfigGuiHeight - 70 " Grid -Multi +LV0x10000 BackgroundFEFEFE", ["配置"])
 ;双击LV单元格可编辑,编辑后有变化则执行重命名函数
-LV_InCellEditing(C_LVconfigs,, (this, Row, Col, OldText, NewText) {
+LV_InCellEditing(C_LV,, (this, Row, Col, OldText, NewText) {
 	ConfigGui_SB.SetText("")
 	if FileUnion.Configs.Has(NewText) {
 		this.LV.Modify(Row, "col" Col, OldText)
@@ -72,45 +75,52 @@ LV_InCellEditing(C_LVconfigs,, (this, Row, Col, OldText, NewText) {
 	ConfigGui_SB.SetText('配置"' OldText '"重命名为: "' NewText '"')
 })
 ;列表选择项目变化
-C_LVconfigs.SelectedRow := 0
-C_LVconfigs.SelectedConfig := ""
-C_LVconfigs.OnEvent("ItemSelect", (thisLV, Item, Selected) {
+C_LV.SelectedRow := 0
+C_LV.SelectedConfig := ""
+C_LV.OnEvent("ItemSelect", (thisLV, Item, Selected) {
 	rowI := thisLV.GetNext()
 	if rowI && Item != rowI
 		return
-	C_LVconfigs.SelectedRow := rowI
+	C_LV.SelectedRow := rowI
 	C_LVconfigsUpdate(rowI)
 })
 C_LVconfigsUpdate(rowI := 0) {
+	;保存前一个配置的规则
+	C1_LV.SaveRule()
+	C2_LV.SaveRule(, C2_DDLruleIndex.Value)
+	C3_LV.SaveRule()
+	SaveAdvancedRules()
+	;按行切换配置
 	if rowI	{
-		Text := C_LVconfigs.GetText(rowI)
+		Text := C_LV.GetText(rowI)
+		C_LV.SelectedConfig := FileUnion.Configs[Text]
+		C2_DDLruleIndex.Update()
+		C2_DDLruleIndex.Value := 1
 		EnabledGroupBoxRule(true)
 		ConfigGui_SB.SetText("配置: " Text)
 	} else {
-		Text := rowI
+		C_LV.SelectedConfig := ""
+		C2_DDLruleIndex.Update("")
+		C2_DDLruleIndex.Value := 0
 		EnabledGroupBoxRule(false)
 		ConfigGui_SB.SetText("未选择配置")
 	}
-	;保存前一个配置的规则
-	C_LVrule.SaveRule(, C_DDLruleIndex.Value)
-	C_DDLruleIndex.lastValue := C_DDLruleIndex.Value := 1
-	C_LVprocess.SaveRule()
-	SaveAdvancedRules()
-	;选择项变化
-	C_LVconfigs.SelectedConfig := Text
 	;加载当前配置的规则
-	C_LVrule.LoadRule()
-	C_LVprocess.LoadRule()
+	C1_LV.LoadRule()
+	C2_LV.LoadRule()
+	C3_LV.LoadRule()
 	LoadAdvancedRules()
 }
 ;控制文件合并规则控件状态
-EnabledGroupBoxRule(s) {
-	C_EDnoRepeatFields.Enabled := C_LVprocess.Enabled := C_BTaddKey2.Enabled := C_BTdeleteKey2.Enabled
-	:= C_DDLruleIndex.Enabled := C_BTaddRule.Enabled := C_BTdeleteRule.Enabled := C_BTdefaultRule.Enabled 
-	:= C_BTclearRule.Enabled := C_LVrule.Enabled := C_BTaddKey.Enabled := C_BTdeleteKey.Enabled := s ? true : false
+EnabledGroupBoxRule(Enabled) {
+	C2_EnabledButtons()
+	C1_LV.Enabled := C1_BTreset.Enabled :=
+	C2_DDLruleIndex.Enabled := C2_LV.Enabled := C2_BTaddKey.Enabled := C2_BTdeleteKey.Enabled :=
+	C3_LV.Enabled := C3_BTaddKey.Enabled := C3_BTdeleteKey.Enabled := 
+	C4_EDnoRepeatFields.Enabled := Enabled ? true : false
 }
 ;右键某行弹出菜单
-C_LVconfigs.OnEvent("ContextMenu", (thisLV, rowI, IsRightClick, X, Y) {
+C_LV.OnEvent("ContextMenu", (thisLV, rowI, IsRightClick, X, Y) {
 	;初次调用时创建菜单
 	if !IsSet(MyMenu) {
 		static MyMenu := Menu()
@@ -122,14 +132,10 @@ C_LVconfigs.OnEvent("ContextMenu", (thisLV, rowI, IsRightClick, X, Y) {
 		;MyMenu.SetIcon("4&", "SHELL32.dll", 4) ; 获取文件夹图标
 
 		MyMenu_Call(ItemName, ItemPos, MyMenu) {
-			switch ItemPos
-			{
-			case 1:
-				C_LVconfigs.CopyConfig(MyMenu.rowI)
-			case 2:
-				C_LVconfigs.DeleteConfig(MyMenu.rowI)
-			case 4:
-				C_LVconfigs.AddConfig()
+			switch ItemPos {
+				case 1: C_LV.CopyConfig(MyMenu.rowI)
+				case 2: C_LV.DeleteConfig(MyMenu.rowI)
+				case 4: C_LV.AddConfig()
 			}
 		}
 	}
@@ -142,24 +148,24 @@ C_LVconfigs.OnEvent("ContextMenu", (thisLV, rowI, IsRightClick, X, Y) {
 	MyMenu.Show()
 })
 ; 从FileUnion.Configs加载参数到LV
-C_LVconfigs.Update := (thisLV) {
+C_LV.Update := (thisLV) {
 	thisLV.Delete()
 	for name, config in FileUnion.Configs
 		thisLV.Add(, name)
 }
 ; 保存LV参数到FileUnion.Configs
-C_LVconfigs.SaveRule := (thisLV, name?, i?) {
+C_LV.SaveRule := (thisLV, name?, i?) {
 	/*
 	if !FileUnion.Configs.Has(name ?? C_CBconfig.Text)
 		return
-	rule := FileUnion.Configs[name ?? C_CBconfig.Text][i ?? C_DDLruleIndex.Value]
+	rule := FileUnion.Configs[name ?? C_CBconfig.Text][i ?? C2_DDLruleIndex.Value]
 	rule.length := 0
 	Loop thisLV.GetCount()
 		rule.push([thisLV.GetText(A_Index,1), thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
 	*/
 }
 ;新建配置
-C_LVconfigs.AddConfig := (thisLV) {
+C_LV.AddConfig := (thisLV) {
 	ConfigGui_SB.SetText("")
 	ConfigGui.Opt("+OwnDialogs")
 	IB := InputBox("输入一个新的配置名称:", "新建配置", "w250 h100", "")
@@ -175,9 +181,9 @@ C_LVconfigs.AddConfig := (thisLV) {
 	}
 }
 ;删除配置
-C_LVconfigs.DeleteConfig := (thisLV, RowNumber?) {
+C_LV.DeleteConfig := (thisLV, RowNumber?) {
 	ConfigGui_SB.SetText("")
-	RowNumber := RowNumber ?? C_LVconfigs.SelectedRow
+	RowNumber := RowNumber ?? C_LV.SelectedRow
 	if RowNumber = 0
 		return
 	FileUnion.Configs.Delete(OldText := thisLV.GetText(RowNumber))
@@ -187,7 +193,7 @@ C_LVconfigs.DeleteConfig := (thisLV, RowNumber?) {
 	ConfigGui_SB.SetText("配置已删除: " OldText)
 }
 ;复制配置
-C_LVconfigs.CopyConfig := (thisLV, RowNumber) {
+C_LV.CopyConfig := (thisLV, RowNumber) {
 	ConfigGui_SB.SetText("")
 	text := thisLV.GetText(RowNumber)
 	IB := InputBox("复制为新配置的名称:", "配置复制", "w250 h100", text "_副本")
@@ -209,10 +215,10 @@ EnabledConfigButtons(configNameExist) {
 }
 ;按钮-新建配置
 C_BTAddConfig := ConfigGui.Add("Button", "xp y+4 w73 h26", "新建配置")
-C_BTAddConfig.OnEvent("Click", (*) => C_LVconfigs.AddConfig())
+C_BTAddConfig.OnEvent("Click", (*) => C_LV.AddConfig())
 ;按钮-删除配置
 C_BTDeleteConfig := ConfigGui.Add("Button", "x+1 yp wp hp", "删除配置")
-C_BTDeleteConfig.OnEvent("Click", (*) => C_LVconfigs.DeleteConfig())
+C_BTDeleteConfig.OnEvent("Click", (*) => C_LV.DeleteConfig())
 
 
 
@@ -222,18 +228,18 @@ C_BTDeleteConfig.OnEvent("Click", (*) => C_LVconfigs.DeleteConfig())
 
 ;Group 配置
 ConfigGui.SetFont("c0070DE bold", "微软雅黑")
-C_TABconfig := ConfigGui.Add("Tab3", "x+10 y10 Section w" ConfigGuiWidth - 180 " h" ConfigGuiHeight - 40, ["文件添加","内容提取","内容处理","高级"])
+C_TABconfig := ConfigGui.Add("Tab3", "x+10 y10 Section w" ConfigGuiWidth - 180 " h" ConfigGuiHeight - 40, ["文件筛选","内容提取","内容处理","高级"])
 ConfigGui.SetFont("cDefault norm", "微软雅黑")
-C_TABconfig.Value := C_TABconfig.lastValue := 2
+C_TABconfig.Value := C_TABconfig.lastValue := 1
 /*
 C_TABconfig.OnEvent("Change", (*) {
     switch C_TABconfig.lastValue {
 		case 1:
 			
 		case 2:
-			C_LVrule.SaveRule()
+			C2_LV.SaveRule()
 		case 3:
-			C_LVprocess.SaveRule()
+			C3_LV.SaveRule()
 	}
 	C_TABconfig.lastValue := C_TABconfig.Value
 })
@@ -255,35 +261,47 @@ C_TABconfig.OnEvent("Change", (*) {
 *               *
 \***************/
 
-;文件添加规则
-;C_TABconfig.UseTab(1)
+;文件筛选
+C_TABconfig.UseTab(1)
 
-;设置忽略文重复件名
-C_CBFliesNoRepeat := ConfigGui.Add("CheckBox", "xs+10 ys+30 w210 h25", "忽略完全相同的文件")
-C_CBFliesNoRepeat.Value := LOCAL_JSON.Init("C_CBFliesNoRepeat.Value", "1")
-C_CBFliesNoRepeat.ToolTip := "勾选后会忽略文件名和修改日期完全相同的文件"
-C_CBFliesNoRepeat.OnEvent("Click", (thisCtrl, Info) {
-	ConfigGui.Opt("+Disabled")
-	;LV_LoadDir(true)
-	ConfigGui.Opt("-Disabled")
+;文件筛选LV
+C1_LV := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["","名称","数值"])
+C1_LV.ModifyCol(1, 0)
+C1_LV.ModifyCol(2, 136)
+C1_LV.ModifyCol(3, 160)
+;LV单元格可编辑,编辑后有变化执行函数
+LV_InCellEditing(C1_LV, [3], (this, R, C, OldText, NewText) {
+	ConfigGui_SB.SetText(R ? ("[" C1_LV.GetText(R,2) "] 设置为: " NewText) : "")
+})
+;点选项目触发动作
+C1_LV.OnEvent("Click", (thisLV, R) {
+	ConfigGui_SB.SetText(R ? ("[" thisLV.GetText(R,2) "] : " thisLV.GetText(R,3)) : "")
+})
+;从FileUnion.Configs加载参数到LV
+C1_LV.LoadRule := (thisLV, config?) {
+	thisLV.Delete()
+	if !(config := config ?? C_LV.SelectedConfig)
+		return
+	for _, arr in config.FileFilter
+		thisLV.Add(,, arr[1], arr[2])
+}
+;保存LV参数到FileUnion.Configs
+C1_LV.SaveRule := (thisLV, config?) {
+	if !(config := config ?? C_LV.SelectedConfig)
+		return
+	config.FileFilter.length := 0
+	Loop thisLV.GetCount()
+		config.FileFilter.push([thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
+}
+;添加重置为默认
+C1_BTreset := ConfigGui.Add("Button", "xs+10 y+5 w147 h35", "重置设置")
+C1_BTreset.OnEvent("Click", (*) {
+	if !C_LV.SelectedConfig
+		return
+	C_LV.SelectedConfig.ResetFileFilter()
+	C1_LV.LoadRule()
 })
 
-;设置忽略文件大小小于XX的附件
-C_CBLimitFileSizeKB := ConfigGui.Add("CheckBox", "xp y+0 w140 h25", "忽略文件尺寸(KB)小于")
-C_CBLimitFileSizeKB.Value := LOCAL_JSON.Init("C_CBLimitFileSizeKB.Value", "1")
-C_CBLimitFileSizeKB.OnEvent("Click", (thisCtrl, Info) {
-	ConfigGui.Opt("+Disabled")
-	C_EDLimitFileSizeKB.Enabled := thisCtrl.Value = 1 ? true : false
-	;LV_LoadDir(true)
-	ConfigGui.Opt("-Disabled")
-})
-C_EDLimitFileSizeKB := ConfigGui.Add("Edit", "x+0 yp w65 h25 Center Number Limit6")
-C_EDLimitFileSizeKB.Value := LOCAL_JSON.Init("C_EDLimitFileSizeKB.Value", "1")
-C_EDLimitFileSizeKB.OnEvent("Change", (thisCtrl, Info) {
-	ConfigGui.Opt("+Disabled")
-	;LV_LoadDir(true)
-	ConfigGui.Opt("-Disabled")
-})
 
 
 
@@ -303,88 +321,136 @@ C_EDLimitFileSizeKB.OnEvent("Change", (thisCtrl, Info) {
 *               *
 \***************/
 
-;内容提取规则
+;提取规则 Extract
 C_TABconfig.UseTab(2)
 
 ;设置表格编号
 ConfigGui.Add("Text", "xs+10 ys+30 w50 h25 +0x200", "规则编号")
-C_DDLruleIndex := ConfigGui.Add("DDL", "x+0 yp w80", [1,2,3,4,5,6,7,8,9,10])
-C_DDLruleIndex.Value := C_DDLruleIndex.lastValue := 1
-C_DDLruleIndex.OnEvent("Change", (*) {
-	C_LVrule.SaveRule(, C_DDLruleIndex.lastValue)
-	C_LVrule.LoadRule()
-	C_DDLruleIndex.lastValue := C_DDLruleIndex.Value
+C2_DDLruleIndex := ConfigGui.Add("DDL", "x+0 yp w70", ["通用",1,2,3,4,5,6,7,8,9,10])
+C2_DDLruleIndex.Value := C2_DDLruleIndex.lastValue := 1
+C2_DDLruleIndex.OnEvent("Change", C2_DDLruleIndex_Change)
+C2_DDLruleIndex_Change(param1 := "", *) {
+	C2_LV.SaveRule(, C2_DDLruleIndex.lastValue)
+	if param1 is Number
+		C2_DDLruleIndex.Value := param1
+	C2_LV.LoadRule()
+	C2_EnabledButtons(C2_DDLruleIndex.Value)
+}
+C2_DDLruleIndex.Update := (thisDDL, config?) {
+	thisDDL.Delete()
+	if !(config := config ?? C_LV.SelectedConfig)
+		return C2_DDLruleIndex.lastValue := 0
+	thisDDL.Add(["通用"])
+	loop config.Extract.Length - 1
+		thisDDL.Add([A_Index])
+	C2_DDLruleIndex.Value := (C2_DDLruleIndex.lastValue > config.Extract.Length) ? config.Extract.Length : C2_DDLruleIndex.lastValue
+}
+
+;控制按钮状态
+C2_EnabledButtons(i?) {
+	i := i ?? C2_DDLruleIndex.Value
+	C2_BTaddRule.Enabled := i ? true : false
+	C2_BTcopyRule.Enabled := (i >= 2) ? true : false
+	C2_BTdeleteRule.Enabled := (i >= 2) ? true : false
+	C2_BTresetRule.Enabled := i ? true : false
+	C2_BTclearRule.Enabled := i ? true : false
+}
+
+; 按钮-新增规则
+C2_BTaddRule := ConfigGui.Add("Button", "x+5 yp w35 h25", "新增")
+C2_BTaddRule.OnEvent("Click", (*) {
+	if !(config := C_LV.SelectedConfig)
+		return
+	config.AddExtractRule()
+	C2_DDLruleIndex.Update()
+	C2_DDLruleIndex_Change(config.Extract.Length)
 })
-;按钮-新增
-C_BTaddRule := ConfigGui.Add("Button", "x+10 yp w40 h25", "新增")
-C_BTaddRule.OnEvent("Click", C_BTaddRule_Click)
-C_BTaddRule_Click(thisCtrl, Info) {
-
-}
-;按钮-删除
-C_BTdeleteRule := ConfigGui.Add("Button", "x+0 yp wp hp", "删除")
-C_BTdeleteRule.OnEvent("Click", C_BTdeleteRule_Click)
-C_BTdeleteRule_Click(thisCtrl, Info) {
-
-}
-;按钮-模板
-C_BTdefaultRule := ConfigGui.Add("Button", "x+0 yp wp hp", "模板")
-C_BTdefaultRule.OnEvent("Click", C_BTdefaultRule_Click)
-C_BTdefaultRule_Click(thisCtrl, Info) {
-	if !FileUnion.Configs.Has(C_LVconfigs.SelectedConfig)
+; 按钮-复制规则
+C2_BTcopyRule := ConfigGui.Add("Button", "x+0 yp wp hp", "复制")
+C2_BTcopyRule.OnEvent("Click", (*) {
+	if !(config := C_LV.SelectedConfig)
 		return
-	FileUnion.Configs[C_LVconfigs.SelectedConfig][C_DDLruleIndex.Value] := FileUnion.Configs.GetDefaultRule()
-	C_LVrule.LoadRule()
-}
-;按钮-清空
-C_BTclearRule := ConfigGui.Add("Button", "x+0 yp wp hp", "清空")
-C_BTclearRule.OnEvent("Click", C_BTclearRule_Click)
-C_BTclearRule_Click(thisCtrl, Info) {
-	if !FileUnion.Configs.Has(C_LVconfigs.SelectedConfig)
+	if C_LV.SelectedConfig.CopyExtractRule(C2_DDLruleIndex.Value) {
+		C2_DDLruleIndex.Update()
+		C2_DDLruleIndex_Change(config.Extract.Length)
+	}
+})
+; 按钮-删除规则
+C2_BTdeleteRule := ConfigGui.Add("Button", "x+0 yp wp hp", "删除")
+C2_BTdeleteRule.OnEvent("Click", (*) {
+	if !C_LV.SelectedConfig
 		return
-	FileUnion.Configs[C_LVconfigs.SelectedConfig][C_DDLruleIndex.Value].Length := 0
-	C_LVrule.LoadRule()
-}
-
+	if C_LV.SelectedConfig.RemoveExtractRule(C2_DDLruleIndex.Value) {
+		C2_DDLruleIndex.Update()
+		C2_LV.LoadRule()
+		C2_EnabledButtons(C2_DDLruleIndex.Value)
+	}
+})
+; 按钮-模板
+C2_BTresetRule := ConfigGui.Add("Button", "x+0 yp wp hp", "模板")
+C2_BTresetRule.OnEvent("Click", (*) {
+	if !C_LV.SelectedConfig
+		return
+	C_LV.SelectedConfig.ResetExtractRule(C2_DDLruleIndex.Value)
+	C2_LV.LoadRule()
+})
+; 按钮-清空
+C2_BTclearRule := ConfigGui.Add("Button", "x+0 yp wp hp", "清空")
+C2_BTclearRule.OnEvent("Click", (*) {
+	if !C_LV.SelectedConfig
+		return
+	if C_LV.SelectedConfig.ClearExtractRule(C2_DDLruleIndex.Value)
+		C2_LV.LoadRule()
+})
 
 
 ;提取规则LV
-C_LVrule := ConfigGui.Add("ListView", "xs+10 y+5 w300 h" ConfigGuiHeight - 150 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["键","值","附加"])
-C_LVrule.ModifyCol(1, 90)
-C_LVrule.ModifyCol(2, 130)
-C_LVrule.ModifyCol(3, 76)
+C2_LV := ConfigGui.Add("ListView", "xs+10 y+5 w300 h" ConfigGuiHeight - 150 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["","键","值","附加"])
+C2_LV.ModifyCol(1, 0)
+C2_LV.ModifyCol(2, 90)
+C2_LV.ModifyCol(3, 130)
+C2_LV.ModifyCol(4, 76)
 ;LV单元格可编辑,编辑后执行函数
-LV_InCellEditing(C_LVrule,, (thisLV, Row, Col, OldText, NewText) {
+LV_InCellEditing(C2_LV,, (thisLV, Row, Col, OldText, NewText) {
 	;有变化则进行动作
 })
 ;点选项目触发动作
-C_LVrule.OnEvent("Click", (thisLV, rowI) {
-	ConfigGui_SB.SetText(rowI ? (thisLV.GetText(rowI,1) "   " thisLV.GetText(rowI,2) "   " thisLV.GetText(rowI,3)) : "")
+C2_LV.OnEvent("Click", (thisLV, rowI) {
+	ConfigGui_SB.SetText(rowI ? (thisLV.GetText(rowI,2) "   " thisLV.GetText(rowI,3) "   " thisLV.GetText(rowI,4)) : "")
 })
 ;从FileUnion.Configs加载参数到LV
-C_LVrule.LoadRule := (thisLV, name?, i?) {
+C2_LV.LoadRule := (thisLV, config?, i?) {
 	thisLV.Delete()
-	name := name ?? C_LVconfigs.SelectedConfig
-	if !FileUnion.Configs.Has(name)
-		return
-	for _, arr in FileUnion.Configs[name][i ?? C_DDLruleIndex.Value]
-		thisLV.Add(, arr[1], arr[2], arr[3])
+	if !(config := config ?? C_LV.SelectedConfig)
+		return C2_DDLruleIndex.lastValue := 0
+	for _, arr in config.Extract[i ?? C2_DDLruleIndex.Value]
+		thisLV.Add(,, arr[1], arr[2], arr[3])
+	C2_DDLruleIndex.lastValue := C2_DDLruleIndex.Value
 }
 ;保存LV参数到FileUnion.Configs
-C_LVrule.SaveRule := (thisLV, name?, i?) {
-	name := name ?? C_LVconfigs.SelectedConfig
-	if !FileUnion.Configs.Has(name)
+C2_LV.SaveRule := (thisLV, config?, i?) {
+	if !(config := config ?? C_LV.SelectedConfig)
 		return
-	rule := FileUnion.Configs[name][i ?? C_DDLruleIndex.Value]
+	rule := config.Extract[i ?? C2_DDLruleIndex.Value]
 	rule.length := 0
 	Loop thisLV.GetCount()
-		rule.push([thisLV.GetText(A_Index,1), thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
+		rule.push([thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3), thisLV.GetText(A_Index,4)])
 }
+
+
+; 按钮-添加键
+C2_BTaddKey := ConfigGui.Add("Button", "xs+10 y+5 w147 h35", "添加参数")
+C2_BTaddKey.OnEvent("Click", (*) => LVAddKey(C2_LV))
+; 按钮-删除键
+C2_BTdeleteKey := ConfigGui.Add("Button", "x+5 yp wp hp", "删除参数")
+C2_BTdeleteKey.OnEvent("Click", (*) => LVDeleteKey(C2_LV))
+
+
 ;新增键
 LVAddKey(thisLV, RowNumber?) {
 	if !(IsSet(RowNumber) && IsInteger(RowNumber) && RowNumber > 0 && RowNumber <= thisLV.GetCount())
 		RowNumber := thisLV.GetNext(0) || thisLV.GetCount() + 1 ; 优先插入到选中行下方，否则插入到最后一行
-	RowNumber := thisLV.Insert(RowNumber,, "key" RowNumber, "value" RowNumber)
+	RowNumber := thisLV.Insert(RowNumber,,, "key" RowNumber, "value" RowNumber)
 	thisLV.Focus()
 	thisLV.Modify(0, "-Select")          ;全部取消选中
 	thisLV.Modify(RowNumber, "Select")   ;选中
@@ -410,15 +476,6 @@ LVDeleteKey(thisLV, Rows?) {
 	}
 }
 
-;添加按钮
-C_BTaddKey := ConfigGui.Add("Button", "xs+10 y+5 w147 h35", "添加参数")
-C_BTaddKey.OnEvent("Click", (*) => LVAddKey(C_LVrule))
-;删除按钮
-C_BTdeleteKey := ConfigGui.Add("Button", "x+5 yp wp hp", "删除参数")
-C_BTdeleteKey.OnEvent("Click", (*) => LVDeleteKey(C_LVrule))
-
-
-
 
 /***************\
 *               *
@@ -435,49 +492,47 @@ C_BTdeleteKey.OnEvent("Click", (*) => LVDeleteKey(C_LVrule))
 *               *
 \***************/
 
-;内容处理规则
+;转化规则 Transform
 C_TABconfig.UseTab(3)
 
 
 ;处理规则LV
-C_LVprocess := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["字段","替换字符","替换为"])
-C_LVprocess.ModifyCol(1, 100)
-C_LVprocess.ModifyCol(2, 100)
-C_LVprocess.ModifyCol(3, 96)
+C3_LV := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["","字段","替换字符","替换为"])
+C3_LV.ModifyCol(1, 0)
+C3_LV.ModifyCol(2, 100)
+C3_LV.ModifyCol(3, 100)
+C3_LV.ModifyCol(4, 96)
 ;LV单元格可编辑,编辑后执行函数
-LV_InCellEditing(C_LVprocess,, (thisLV, Row, Col, OldText, NewText) {
+LV_InCellEditing(C3_LV,, (thisLV, Row, Col, OldText, NewText) {
 	;有变化则进行动作
 })
 ;点选项目触发动作
-C_LVprocess.OnEvent("Click", (thisLV, rowI) {
-	ConfigGui_SB.SetText(rowI ? (thisLV.GetText(rowI,1) "   " thisLV.GetText(rowI,2) "   " thisLV.GetText(rowI,3)) : "")
+C3_LV.OnEvent("Click", (thisLV, rowI) {
+	ConfigGui_SB.SetText(rowI ? (thisLV.GetText(rowI,2) "   " thisLV.GetText(rowI,3) "   " thisLV.GetText(rowI,4)) : "")
 })
 ;从FileUnion.Configs加载参数到LV
-C_LVprocess.LoadRule := (thisLV, name?) {
+C3_LV.LoadRule := (thisLV, config?) {
 	thisLV.Delete()
-	name := name ?? C_LVconfigs.SelectedConfig
-	if !FileUnion.Configs.Has(name)
+	if !(config := config ?? C_LV.SelectedConfig)
 		return
-	for _, arr in FileUnion.Configs[name].process
-		thisLV.Add(, arr[1], arr[2], arr[3])
+	for _, arr in config.Transform
+		thisLV.Add(,, arr[1], arr[2], arr[3])
 }
 ;保存LV参数到FileUnion.Configs
-C_LVprocess.SaveRule := (thisLV, name?) {
-	name := name ?? C_LVconfigs.SelectedConfig
-	if !FileUnion.Configs.Has(name)
+C3_LV.SaveRule := (thisLV, config?) {
+	if !(config := config ?? C_LV.SelectedConfig)
 		return
-	process := FileUnion.Configs[name].process
-	process.length := 0
+	config.Transform.length := 0
 	Loop thisLV.GetCount()
-		process.push([thisLV.GetText(A_Index,1), thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
+		config.Transform.push([thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3), thisLV.GetText(A_Index,4)])
 }
 
 ;添加按钮
-C_BTaddKey2 := ConfigGui.Add("Button", "xs+10 y+5 w147 h35", "添加参数")
-C_BTaddKey2.OnEvent("Click", (*) => LVAddKey(C_LVprocess))
+C3_BTaddKey := ConfigGui.Add("Button", "xs+10 y+5 w147 h35", "添加参数")
+C3_BTaddKey.OnEvent("Click", (*) => LVAddKey(C3_LV))
 ;删除按钮
-C_BTdeleteKey2 := ConfigGui.Add("Button", "x+5 yp wp hp", "删除参数")
-C_BTdeleteKey2.OnEvent("Click", (*) => LVDeleteKey(C_LVprocess))
+C3_BTdeleteKey := ConfigGui.Add("Button", "x+5 yp wp hp", "删除参数")
+C3_BTdeleteKey.OnEvent("Click", (*) => LVDeleteKey(C3_LV))
 
 
 
@@ -500,31 +555,29 @@ C_BTdeleteKey2.OnEvent("Click", (*) => LVDeleteKey(C_LVprocess))
 C_TABconfig.UseTab(4)
 
 ;加载当前配置的高级规则
-LoadAdvancedRules(name?) {
-	C_EDnoRepeatFields.Value := ""
+LoadAdvancedRules(config?) {
+	C4_EDnoRepeatFields.Value := ""
 
-	name := name ?? C_LVconfigs.SelectedConfig
-	if !FileUnion.Configs.Has(name)
+	if !(config := config ?? C_LV.SelectedConfig)
 		return
-	advanceRules := FileUnion.Configs[name].advanceRules
+	advanceRules := config.advanceRules
 
-	C_EDnoRepeatFields.Value := advanceRules.Has("noRepeatFields") ? advanceRules["noRepeatFields"] : ""
+	C4_EDnoRepeatFields.Value := advanceRules.Has("noRepeatFields") ? advanceRules["noRepeatFields"] : ""
 }
 ;保存高级规则到当前配置
-SaveAdvancedRules(name?) {
-	name := name ?? C_LVconfigs.SelectedConfig
-	if !FileUnion.Configs.Has(name)
+SaveAdvancedRules(config?) {
+	if !(config := config ?? C_LV.SelectedConfig)
 		return
-	advanceRules := FileUnion.Configs[name].advanceRules
+	advanceRules := config.advanceRules
 
-	advanceRules["noRepeatFields"] := C_EDnoRepeatFields.Value
+	advanceRules["noRepeatFields"] := C4_EDnoRepeatFields.Value
 }
 
 ;忽略重复行
 ConfigGui.Add("Text", "xs+10 ys+33 w60 h25 +0x200", "忽略重复项")
-C_EDnoRepeatFields := ConfigGui.Add("Edit", "x+2 yp w240 hp")
-ConfigGui.Tips.SetTip(C_EDnoRepeatFields, "填写用[]括起来字段名,可以是多个的组合")
-C_EDnoRepeatFields.OnEvent("Change", (thisCtrl, Info) {
+C4_EDnoRepeatFields := ConfigGui.Add("Edit", "x+2 yp w240 hp")
+ConfigGui.Tips.SetTip(C4_EDnoRepeatFields, "填写用[]括起来字段名,可以是多个的组合")
+C4_EDnoRepeatFields.OnEvent("Change", (thisCtrl, Info) {
 	ConfigGui.Opt("+Disabled")
 	;LV_LoadDir(true)
 	ConfigGui.Opt("-Disabled")
@@ -555,23 +608,17 @@ C_EDnoRepeatFields.OnEvent("Change", (thisCtrl, Info) {
 Insert:: {
 	Switch ConfigGui.FocusedCtrl
 	{
-	case C_LVconfigs:
-		C_LVconfigs.AddConfig()
-	case C_LVrule:
-		LVAddKey(C_LVrule)
-	case C_LVprocess:
-		LVAddKey(C_LVprocess)
+	case C_LV: C_LV.AddConfig()
+	case C2_LV: LVAddKey(C2_LV)
+	case C3_LV: LVAddKey(C3_LV)
 	}
 }
 ;删除
 Delete:: {
 	Switch ConfigGui.FocusedCtrl
 	{
-	case C_LVconfigs:
-		C_LVconfigs.DeleteConfig()
-	case C_LVrule:
-		LVDeleteKey(C_LVrule)
-	case C_LVprocess:
-		LVDeleteKey(C_LVprocess)
+	case C_LV: C_LV.DeleteConfig()
+	case C2_LV: LVDeleteKey(C2_LV)
+	case C3_LV: LVDeleteKey(C3_LV)
 	}
 }

@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.1.6"
+APP_VERSION   := "0.1.7"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -126,9 +126,12 @@ L_DDLconfig_Change(*) {
 ;配置设置
 L_BTsetConfig := MainGui.Add("Button", "x+0 yp w50 h25", "设置")
 L_BTsetConfig.OnEvent("Click", (*) {
-	MainGui.Opt("+Disabled")
-	ConfigGui.Update()
-	ConfigGui.Show()
+	if WinExist("ahk_id " ConfigGui.Hwnd) {
+		ConfigGui_Close()
+	} else {
+		ConfigGui.Update()
+		ConfigGui.Show()
+	}
 })
 
 ;文件列表
@@ -166,7 +169,9 @@ L_LVfiles.SetRowColorByPath := (thisLV, path, color) {
 }
 ;加载文件
 LV_LoadFiles(pathArray) {
-	NewFiles := FileUnion.Files.Load(pathArray)
+	if G.ActiveConfig
+		FileFilterRules := G.ActiveConfig.GetFileFilterRules()
+	NewFiles := FileUnion.Files.Load(pathArray, FileFilterRules?)
 	if NewFiles.Length = 0
 		return
 	L_LVfiles.Opt("-Redraw")
@@ -227,12 +232,12 @@ L_BTUnion_Click(thisCtrl, Info) {
 
 	SB.SetText("开始提取文件内容")
 	FileUnion.Data.Clear()
-	deepRules := G.ActiveConfig.ConvertToDeep()
+	G.deepRules := G.ActiveConfig.GetDeepRule()
 	ProgGui.Start(FileUnion.Files.Count)
 	for i, file in FileUnion.Files {
 		ProgGui.StepStart(file.name)
 		try {
-			result := (file.type = "excel") ? FileUnion.LoadExcel(file, deepRules) : FileUnion.LoadWord(file, deepRules)
+			result := (file.type = "excel") ? FileUnion.LoadExcel(file, G.deepRules) : FileUnion.LoadWord(file, G.deepRules)
 		} catch {
 		    ProgGui.StepFinsih(0, "文件提取失败")
 			file.color := "red"
@@ -436,13 +441,14 @@ OnExit (*) {
 MainGui.Init := (thisGui) {
 	thisGui.Opt("+Disabled")
 
-	;拖拽文件夹启动
-	LV_LoadFiles(Path_InArgs()) ; 拖拽文件到程序图标上启动
 	;加载合并的配置
 	FileUnion.Configs.Load(LOCAL_JSON.Init("UnionConfigs", Map())) ;从json对象加载配置
 	;刷新配置DDL
 	L_DDLconfig.Update(FileUnion.Configs.instances, L_DDLconfig.lastText)
 	L_DDLconfig_Change()
+
+	;拖拽文件夹启动
+	LV_LoadFiles(Path_InArgs()) ; 拖拽文件到程序图标上启动
 
 	thisGui.Opt("-Disabled")
 }

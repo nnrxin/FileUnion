@@ -1,10 +1,11 @@
 ﻿; nnrxin库的基础库集合
 ; _BasicLibs_.ahk
 
-;字符串/数组/关联数组的增强
+;字符串/数组/关联数组等的增强
 #Include Extension\Array.ahk ; 数组增强
 #Include Extension\Map.ahk ; 关联数组增强
 #Include Extension\String.ahk ; 字符串增强
+#Include Extension\DeepClone.ahk ; 字符串增强
 
 ;GUI及控件的增强
 #Include GUI\GuiCtrlTips.ahk ; Gui控件的tooltip提示
