@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.1.7"
+APP_VERSION   := "0.1.8"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -117,10 +117,21 @@ L_DDLconfig_Change(*) {
 		G.ActiveConfig := FileUnion.Configs.Switch(L_DDLconfig.Text)
 		SB.SetText("当前配置: " L_DDLconfig.Text)
 		L_BTUnion.Enabled := true
+		rules := G.ActiveConfig.GetExportRules()
+		R_EDtemplatePath.Value := rules.templatePath
+		R_EDpath.Value := rules.filePath
+		R_EDfileName.Value := rules.fileName
+		R_DDLfileExt.Text := rules.fileExt
+		R_CBaddTimestamp.Value := rules.addTimestamp ? 1 : 0
 	} else {
 		G.ActiveConfig := ""
 		SB.SetText("配置为空")
 		L_BTUnion.Enabled := false
+		R_EDtemplatePath.Value := ""
+		R_EDpath.Value := ""
+		R_EDfileName.Value := ""
+		R_DDLfileExt.Text := ""
+		R_CBaddTimestamp.Value := 0
 	}
 }
 ;配置设置
@@ -304,7 +315,6 @@ MainGui.SetFont("cDefault norm", "微软雅黑")
 
 MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200 AXP", "导出模板")
 R_EDtemplatePath := MainGui.Add("Edit", "x+0 yp w130 h25 AXP")
-R_EDtemplatePath.Value := LOCAL_JSON.Init("R_EDtemplatePath.Value", "")
 R_BTtemplatePath := MainGui.Add("button", "x+0 yp w25 h25 AXP", "...")
 R_BTtemplatePath.OnEvent("Click", (*) {
 	MainGui.Opt("+OwnDialogs")    ;对话框出现时禁止操作主GUI
@@ -315,7 +325,6 @@ R_BTtemplatePath.OnEvent("Click", (*) {
 
 MainGui.Add("Text", "xs+10 y+5 w50 h25 +0x200 AXP", "文件路径")
 R_EDpath := MainGui.Add("Edit", "x+0 yp w130 h25 AXP")
-R_EDpath.Value := LOCAL_JSON.Init("R_EDpath.Value", "")
 R_BTdir := MainGui.Add("button", "x+0 yp w25 h25 AXP", "...")
 R_BTdir.OnEvent("Click", (*) {
 	MainGui.Opt("+OwnDialogs")    ;对话框出现时禁止操作主GUI
@@ -327,14 +336,11 @@ R_BTdir.OnEvent("Click", (*) {
 
 MainGui.Add("Text", "xs+10 y+5 w50 h25 +0x200 AXP", "文件名称")
 R_EDfileName := MainGui.Add("Edit", "x+0 yp w155 h25 AXP")
-R_EDfileName.Value := LOCAL_JSON.Init("R_EDfileName.Value", "FUexport")
 
 MainGui.Add("Text", "xs+10 y+5 w50 h25 +0x200 AXP", "文件类型")
 R_DDLfileExt := MainGui.Add("DDL", "x+0 yp w155 AXP", ["xlsx","xls","accdb"])
-R_DDLfileExt.Value := LOCAL_JSON.Init("R_DDLfileExt.Value", 1)
 
 R_CBaddTimestamp:= MainGui.Add("CheckBox", "xs+10 y+5 w200 h25 AXP", "生成的文件名后增加时间戳")
-R_CBaddTimestamp.Value := LOCAL_JSON.Init("R_CBaddTimestamp.Value", 1)
 
 ;导出为Excel
 R_BTexport := MainGui.Add("Button", "xs+7 y+5 w210 h50 AXP", "导出为文件")
@@ -344,10 +350,10 @@ R_BTexport_Click(thisCtrl, Info) {
 
 	fileName := (R_CBaddTimestamp.Value ? R_EDfileName.Value "-" A_Now : R_EDfileName.Value) "." R_DDLfileExt.Text
 	path := Path_Full((R_EDpath.Value && DirExist(R_EDpath.Value) ? R_EDpath.Value : A_ScriptDir) "\" fileName)
+	if FileExist(path)
+		FileDelete(path)
 	if FileExist(R_EDtemplatePath.Value)
 	    FileCopy(R_EDtemplatePath.Value, path)
-	else if FileExist(path) ;删除已经存在的文件
-		FileDelete(path)
 	switch R_DDLfileExt.Text {
 		case "xlsx", "xls":
 			FileUnion.ExportToExcel(path)

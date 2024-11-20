@@ -138,6 +138,15 @@ Class FileUnion {
 			["[检验员]"   , "8"                          , ""      ],
 		]
 
+		; 实例继承属性: 预设数据导出规则
+		static Prototype.defaultExportRules := [
+			["导出模板"       , ""  ],
+			["导出文件路径"   , ""  ],
+			["导出文件名"     , ""  ],
+			["导出文件类型"   , ""  ],
+			["文件名后时间戳" , "1" ],
+		]
+
 		; 实例管理
 		static instances := Map() ; 实例集合
 		static active := "" ; 当前活动配置
@@ -178,8 +187,9 @@ Class FileUnion {
 			this[name] := this(name)
 			this[name].FileFilter := this[cloneFromName].FileFilter.Clone()
 			this[name].Extract := this[cloneFromName].Extract.Clone()
-			this[name].Transform := this[cloneFromName].Transform.Clone()
+			this[name].RegExReplaceRules := this[cloneFromName].RegExReplaceRules.Clone()
 			this[name].advanceRules := this[cloneFromName].advanceRules.Clone()
+			this[name].ExportRules := this[cloneFromName].ExportRules.Clone()
 			return this.active := this[name]
 		}
 		; 切换配置
@@ -216,10 +226,11 @@ Class FileUnion {
 			this.name := name
 			this.FileFilter := this.defaultFileFilter.Clone() ; 文件筛选规则
 			this.Extract := [this.defaultExtractCommonRule.Clone(), this.defaultExtractSpecRule.Clone()] ; 文件提取规则(1个通用规则,一个特殊规则)
-			this.Transform := [] ; 内容转化规则
+			this.RegExReplaceRules := [] ; 内容转化规则
 			this.advanceRules := Map(
 				"noRepeatFields", "" ; 不允许重复的字段
 			) ; 高级规则
+			this.ExportRules := this.defaultExportRules.Clone() ; 数据导出规则
 		}
 		; 删除
 		__Delete() {
@@ -227,6 +238,9 @@ Class FileUnion {
 
 		;重置FileFilter
 		ResetFileFilter() => this.FileFilter := this.defaultFileFilter.Clone()
+
+		;重置ExportRules
+		ResetExportRules() => this.ExportRules := this.defaultExportRules.Clone()
 
 		;重置Extract的第i个规则
 		ResetExtractRule(i) => this.Extract[i] := (i = 1) ? this.defaultExtractCommonRule.Clone() : this.defaultExtractSpecRule.Clone()
@@ -284,6 +298,20 @@ Class FileUnion {
 			return rules
 		}
 
+		;获取导出文件规则
+		GetExportRules() {
+			rules := {}
+			mp := Map()
+			for _, v in this.ExportRules
+				mp[v[1]] := v[2]
+			rules.templatePath := mp["导出模板"] ?? ""
+			rules.fileExt := mp["导出文件类型"] ?? ""
+			rules.filePath := mp["导出文件路径"] ?? ""
+			rules.fileName := mp["导出文件名"] ?? ""
+			rules.addTimestamp := mp["文件名后时间戳"] ?? 1
+			return rules
+		}
+
 		;转化成底层配置
 		GetDeepRule() {
 			deepRules := []
@@ -297,7 +325,7 @@ Class FileUnion {
 				else if RegExMatch(k, "^\[(.+)]$", &m) {
 					; 字段信息
 					fieldName := m[1]
-					if RegExMatch(v, "(\d+),(\d+)", &m) ; 固定单元格
+					if RegExMatch(v, "^(\d+),(\d+)$", &m) ; 固定单元格
 						CommonFields.Push({name: fieldName, R: m[1], C: m[2]})
 					else if IsDigit(v) ; 固定列
 						CommonFields.Push({name: fieldName, C: v})
@@ -313,16 +341,16 @@ Class FileUnion {
 					if v2 != ""
 						CommonField.FormatStr := v2    ; 添加格式字符串
 					CommonField.GetValue := GetValue   ; 绑定函数
-					CommonField.RegExReplaceOpts := [] ; 正则替换选项
+					CommonField.RegExReplaceRules := [] ; 正则替换选项
 				}
 			}
 			;添加配置内容转化规则
-			for _, arr in this.Transform {
+			for _, arr in this.RegExReplaceRules {
 				FieldName := arr[1], NeedleRegEx := arr[2], Replacement := arr[3]
 				if !CommonFieldsIndex.has(fieldName) ; 不在通用字段中时跳过
 					continue
 				CommonField := CommonFields[CommonFieldsIndex[fieldName]]
-				CommonField.RegExReplaceOpts.Push([NeedleRegEx,Replacement])
+				CommonField.RegExReplaceRules.Push([NeedleRegEx,Replacement])
 			}
 			;特殊提取规则
 			for i, rule in this.Extract {
@@ -356,7 +384,7 @@ Class FileUnion {
 					else if RegExMatch(k, "^\[(.+)]$", &m) && CommonFieldsIndex.has(m[1]) {
 						field := deepRule.fields[CommonFieldsIndex[m[1]]]
 						; v
-						if RegExMatch(v, "(\d+),(\d+)", &m) ; 固定单元格
+						if RegExMatch(v, "^(\d+),(\d+)$", &m) ; 固定单元格
 							field.R := m[1], field.C := m[2]
 						else if IsDigit(v) ; 固定列
 							field.C := v
@@ -401,7 +429,7 @@ Class FileUnion {
 						value := value
 				}
 				;正则替换转化
-				for _, rule in field.RegExReplaceOpts
+				for _, rule in field.RegExReplaceRules
 					value := RegExReplace(value, rule[1], rule[2])
 				return value
 			}
@@ -680,24 +708,25 @@ Class FileUnion {
 	 * 导出为Excel
 	 */
 	static ExportToExcel(path) {
-		if FileExist(path) {
-			book := XL.Load(path)
-			sheet := book[0]
-		} else {
-			book := XL.New(Path_Extension(path))
-			sheet := book.addSheet('Sheet1')
-			for R, FieldName in this.Data.FieldNames
-				sheet[0, R-1] := FieldName
-		}
-		for R, row in this.Data {
+		;打开或新建sheet
+		if FileExist(path)
+			book := XL.Load(path), sheet := book.active
+		else
+			book := XL.New(Path_Ext(path)), sheet := book.addSheet('Sheet1')
+		;写入内容
+		for C, FieldName in this.Data.FieldNames
+			sheet[1, C].value := FieldName
+		if this.Data.RowCount > 1
+			sheet.InsertRowWithFormat(2, this.Data.RowCount - 1) ; 插入多行带格式的行
+		for i, row in this.Data {
 			for C, value in row {
-				sheet[R, C-1] := IsNumber(value) ? Number(value) : value
-				if R > 1
-					sheet[R, C-1].format := sheet.cellFormat(R-1, C-1)
+				if SubStr(value,1,1) = "="
+					sheet.writeFormula(i + 1, C, value)
+				else
+					sheet[i + 1, C].value := IsNumber(value) ? Number(value) : value
 			}
-			if R < this.Data.Rows.Length
-				sheet.insertRow(R+1, R+1) ; 向下插入一行
 		}
+		;保存并关闭
 		book.save(path)
 		book := ''
 	}
@@ -709,7 +738,7 @@ Class FileUnion {
 		; 创建Access数据库
 		acApp := ComObject("Access.Application")
 		if !FileExist(path)
-			acApp.NewCurrentDatabase(path, (Path_Extension(path) = "mdb") ? 10 : 0)
+			acApp.NewCurrentDatabase(path, (Path_Ext(path) = "mdb") ? 10 : 0)
 		acApp.Quit()
 		acApp := ""
 		; 连接到数据库并新建表

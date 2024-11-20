@@ -2,7 +2,7 @@
 
 ;创建配置GUI
 ConfigGuiWidth := 500, ConfigGuiHeight := 600
-ConfigGui := Gui("-MaximizeBox -MinimizeBox +AlwaysOnTop", APP_NAME_CN "-配置")
+ConfigGui := Gui("-MaximizeBox -MinimizeBox", APP_NAME_CN "-配置")
 ;ConfigGui.Opt("+Owner")
 ConfigGui.Show("hide w" ConfigGuiWidth " h" ConfigGuiHeight)
 ConfigGui.MarginX := ConfigGui.MarginY := 0
@@ -17,6 +17,7 @@ ConfigGui_Close(*) {
 	C2_LV.SaveRule()
 	C3_LV.SaveRule()
 	SaveAdvancedRules()
+	C5_LV.SaveRule()
 	; 调整主界面的插件并激活主界面
 	L_DDLconfig_Change()
 	;MainGui.Opt("-Disabled")
@@ -90,6 +91,7 @@ C_LVconfigsUpdate(rowI := 0) {
 	C2_LV.SaveRule(, C2_DDLruleIndex.Value)
 	C3_LV.SaveRule()
 	SaveAdvancedRules()
+	C5_LV.SaveRule()
 	;按行切换配置
 	if rowI	{
 		Text := C_LV.GetText(rowI)
@@ -110,6 +112,7 @@ C_LVconfigsUpdate(rowI := 0) {
 	C2_LV.LoadRule()
 	C3_LV.LoadRule()
 	LoadAdvancedRules()
+	C5_LV.LoadRule()
 }
 ;控制文件合并规则控件状态
 EnabledGroupBoxRule(Enabled) {
@@ -166,8 +169,8 @@ C_LV.SaveRule := (thisLV, name?, i?) {
 }
 ;新建配置
 C_LV.AddConfig := (thisLV) {
-	ConfigGui_SB.SetText("")
 	ConfigGui.Opt("+OwnDialogs")
+	ConfigGui_SB.SetText("")
 	IB := InputBox("输入一个新的配置名称:", "新建配置", "w250 h100", "")
 	if IB.Result = "OK" &&  IB.Value != "" && IB.Value != "" {
 		if FileUnion.Configs.Has(IB.Value)
@@ -194,6 +197,7 @@ C_LV.DeleteConfig := (thisLV, RowNumber?) {
 }
 ;复制配置
 C_LV.CopyConfig := (thisLV, RowNumber) {
+	ConfigGui.Opt("+OwnDialogs")
 	ConfigGui_SB.SetText("")
 	text := thisLV.GetText(RowNumber)
 	IB := InputBox("复制为新配置的名称:", "配置复制", "w250 h100", text "_副本")
@@ -228,7 +232,7 @@ C_BTDeleteConfig.OnEvent("Click", (*) => C_LV.DeleteConfig())
 
 ;Group 配置
 ConfigGui.SetFont("c0070DE bold", "微软雅黑")
-C_TABconfig := ConfigGui.Add("Tab3", "x+10 y10 Section w" ConfigGuiWidth - 180 " h" ConfigGuiHeight - 40, ["文件筛选","内容提取","内容处理","高级"])
+C_TABconfig := ConfigGui.Add("Tab3", "x+10 y10 Section w" ConfigGuiWidth - 180 " h" ConfigGuiHeight - 40, ["文件筛选","内容提取","正则替换","数据处理","数据导出"])
 ConfigGui.SetFont("cDefault norm", "微软雅黑")
 C_TABconfig.Value := C_TABconfig.lastValue := 1
 /*
@@ -492,11 +496,11 @@ LVDeleteKey(thisLV, Rows?) {
 *               *
 \***************/
 
-;转化规则 Transform
+;正则替换
 C_TABconfig.UseTab(3)
 
 
-;处理规则LV
+;正则替换规则LV
 C3_LV := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["","字段","替换字符","替换为"])
 C3_LV.ModifyCol(1, 0)
 C3_LV.ModifyCol(2, 100)
@@ -515,16 +519,16 @@ C3_LV.LoadRule := (thisLV, config?) {
 	thisLV.Delete()
 	if !(config := config ?? C_LV.SelectedConfig)
 		return
-	for _, arr in config.Transform
+	for _, arr in config.RegExReplaceRules
 		thisLV.Add(,, arr[1], arr[2], arr[3])
 }
 ;保存LV参数到FileUnion.Configs
 C3_LV.SaveRule := (thisLV, config?) {
 	if !(config := config ?? C_LV.SelectedConfig)
 		return
-	config.Transform.length := 0
+	config.RegExReplaceRules.length := 0
 	Loop thisLV.GetCount()
-		config.Transform.push([thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3), thisLV.GetText(A_Index,4)])
+		config.RegExReplaceRules.push([thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3), thisLV.GetText(A_Index,4)])
 }
 
 ;添加按钮
@@ -551,7 +555,7 @@ C3_BTdeleteKey.OnEvent("Click", (*) => LVDeleteKey(C3_LV))
 *               *
 \***************/
 
-;高级规则
+;数据处理
 C_TABconfig.UseTab(4)
 
 ;加载当前配置的高级规则
@@ -582,6 +586,84 @@ C4_EDnoRepeatFields.OnEvent("Change", (thisCtrl, Info) {
 	;LV_LoadDir(true)
 	ConfigGui.Opt("-Disabled")
 })
+
+
+
+/***************\
+*               *
+*   *********   *
+*   *********   *
+*   ***         *
+*   ********    *
+*   *********   *
+*         ***   *
+*         ***   *
+*   ***   ***   *
+*   *********   *
+*    *******    *
+*               *
+\***************/
+
+
+
+;高级规则
+C_TABconfig.UseTab(5)
+
+;文件筛选LV
+C5_LV := ConfigGui.Add("ListView", "xs+10 ys+30 w300 h" ConfigGuiHeight - 120 " Grid NoSort -LV0x10 +LV0x10000 BackgroundFEFEFE", ["","名称","数值"])
+C5_LV.ModifyCol(1, 0)
+C5_LV.ModifyCol(2, 106)
+C5_LV.ModifyCol(3, 190)
+;LV单元格可编辑,编辑后有变化执行函数
+LV_InCellEditing(C5_LV, [3], (this, R, C, OldText, NewText) {
+	switch C5_LV.GetText(R,2) {
+		case "导出模板":
+			if NewText = "" || InStr(FileGetAttrib(NewText), "A") && ["xls","xlsx"].IndexOf(Path_Ext(NewText))
+				this.LV.Modify(R, "col" C, NewText := Path_Full(NewText))
+			else {
+				this.LV.Modify(R, "col" C, OldText)
+				return ConfigGui_SB.SetText("[" C5_LV.GetText(R,2) "] 设置失败: " NewText " 不是有效路径" )
+			}
+		case "导出文件类型":
+			if !["","xls","xlsx","accdb"].IndexOf(NewText) {
+				this.LV.Modify(R, "col" C, OldText)
+				return ConfigGui_SB.SetText("[" C5_LV.GetText(R,2) "] 设置失败: " NewText " 只能是xls,xlsx,accdb中的一个" )
+			}
+		case "导出文件路径":
+		case "导出文件名":
+		case "文件名后时间戳":
+	}
+	ConfigGui_SB.SetText(R ? ("[" C5_LV.GetText(R,2) "] 设置为: " NewText) : "")
+})
+;点选项目触发动作
+C5_LV.OnEvent("Click", (thisLV, R) {
+	ConfigGui_SB.SetText(R ? ("[" thisLV.GetText(R,2) "] : " thisLV.GetText(R,3)) : "")
+})
+;从FileUnion.Configs加载参数到LV
+C5_LV.LoadRule := (thisLV, config?) {
+	thisLV.Delete()
+	if !(config := config ?? C_LV.SelectedConfig)
+		return
+	for _, arr in config.ExportRules
+		thisLV.Add(,, arr[1], arr[2])
+}
+;保存LV参数到FileUnion.Configs
+C5_LV.SaveRule := (thisLV, config?) {
+	if !(config := config ?? C_LV.SelectedConfig)
+		return
+	config.ExportRules.length := 0
+	Loop thisLV.GetCount()
+		config.ExportRules.push([thisLV.GetText(A_Index,2), thisLV.GetText(A_Index,3)])
+}
+;添加重置为默认
+C5_BTreset := ConfigGui.Add("Button", "xs+10 y+5 w147 h35", "重置设置")
+C5_BTreset.OnEvent("Click", (*) {
+	if !C_LV.SelectedConfig
+		return
+	C_LV.SelectedConfig.ResetExportRules()
+	C5_LV.LoadRule()
+})
+
 
 
 
