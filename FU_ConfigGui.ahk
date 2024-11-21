@@ -619,7 +619,7 @@ LV_InCellEditing(C5_LV, [3], (this, R, C, OldText, NewText) {
 	switch C5_LV.GetText(R,2) {
 		case "导出模板":
 			if NewText = "" || InStr(FileGetAttrib(NewText), "A") && ["xls","xlsx"].IndexOf(Path_Ext(NewText))
-				this.LV.Modify(R, "col" C, NewText := Path_Full(NewText))
+				this.LV.Modify(R, "col" C, NewText := NewText)
 			else {
 				this.LV.Modify(R, "col" C, OldText)
 				return ConfigGui_SB.SetText("[" C5_LV.GetText(R,2) "] 设置失败: " NewText " 不是有效路径" )
@@ -691,8 +691,8 @@ Insert:: {
 	Switch ConfigGui.FocusedCtrl
 	{
 	case C_LV: C_LV.AddConfig()
-	case C2_LV: LVAddKey(C2_LV)
-	case C3_LV: LVAddKey(C3_LV)
+	;case C2_LV: LVAddKey(C2_LV)
+	;case C3_LV: LVAddKey(C3_LV)
 	}
 }
 ;删除
@@ -700,7 +700,7 @@ Delete:: {
 	Switch ConfigGui.FocusedCtrl
 	{
 	case C_LV: C_LV.DeleteConfig()
-	case C2_LV: LVDeleteKey(C2_LV)
-	case C3_LV: LVDeleteKey(C3_LV)
+	;case C2_LV: LVDeleteKey(C2_LV)
+	;case C3_LV: LVDeleteKey(C3_LV)
 	}
 }

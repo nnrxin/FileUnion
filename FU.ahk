@@ -36,7 +36,7 @@ APP_NAME_FULL := "FileUnion"
 APP_NAME_CN   := "文件合并FU"
 ;@Ahk2Exe-Let U_NameCN = %A_PriorLine~U)(^.*")|(".*$)%
 ; 当前版本
-APP_VERSION   := "0.1.8"
+APP_VERSION   := "0.1.9"
 ;@Ahk2Exe-Let U_ProductVersion = %A_PriorLine~U)(^.*")|(".*$)%
 
 
@@ -108,7 +108,7 @@ FU_GBfiles := MainGui.Add("GroupBox", "xm+5 ym w" FU_GBfiles_W " h" MainGuiHeigh
 MainGui.SetFont("cDefault norm", "微软雅黑")
 
 ;当前配置
-MainGui.Add("Text", "xm+15 ym+17 w55 h25 Section +0x200", "当前配置")
+MainGui.Add("Text", "xm+15 ym+20 w55 h25 Section +0x200", "当前配置")
 L_DDLconfig := MainGui.Add("DDL", "x+0 yp w145")
 L_DDLconfig.lastText := LOCAL_JSON.Init("L_DDLconfig.Text", "")
 L_DDLconfig.OnEvent("Change", L_DDLconfig_Change)
@@ -117,12 +117,13 @@ L_DDLconfig_Change(*) {
 		G.ActiveConfig := FileUnion.Configs.Switch(L_DDLconfig.Text)
 		SB.SetText("当前配置: " L_DDLconfig.Text)
 		L_BTUnion.Enabled := true
-		rules := G.ActiveConfig.GetExportRules()
-		R_EDtemplatePath.Value := rules.templatePath
-		R_EDpath.Value := rules.filePath
-		R_EDfileName.Value := rules.fileName
-		R_DDLfileExt.Text := rules.fileExt
-		R_CBaddTimestamp.Value := rules.addTimestamp ? 1 : 0
+		G.ExportRules := G.ActiveConfig.GetExportRules()
+		R_EDtemplatePath.Value := G.ExportRules.templatePath
+		R_EDpath.Value := G.ExportRules.filePath
+		R_EDfileName.Value := G.ExportRules.fileName
+		R_DDLfileExt.Text := G.ExportRules.fileExt
+		R_CBaddTimestamp.Value := G.ExportRules.addTimestamp
+		R_CBopenPathAfterFinish.Value := G.ExportRules.openPathAfterFinish 
 	} else {
 		G.ActiveConfig := ""
 		SB.SetText("配置为空")
@@ -132,6 +133,7 @@ L_DDLconfig_Change(*) {
 		R_EDfileName.Value := ""
 		R_DDLfileExt.Text := ""
 		R_CBaddTimestamp.Value := 0
+		R_CBopenPathAfterFinish.Value := 0
 	}
 }
 ;配置设置
@@ -310,7 +312,7 @@ MainGui.SetFont("cDefault norm", "微软雅黑")
 
 ;Group 导出
 MainGui.SetFont("c9382C9 bold", "微软雅黑")
-MainGui.Add("GroupBox", "xs y+5 Section w225 h230 AXP", "导出")
+MainGui.Add("GroupBox", "xs y+5 Section w225 h255 AXP", "导出")
 MainGui.SetFont("cDefault norm", "微软雅黑")
 
 MainGui.Add("Text", "xs+10 ys+20 w50 h25 +0x200 AXP", "导出模板")
@@ -340,7 +342,9 @@ R_EDfileName := MainGui.Add("Edit", "x+0 yp w155 h25 AXP")
 MainGui.Add("Text", "xs+10 y+5 w50 h25 +0x200 AXP", "文件类型")
 R_DDLfileExt := MainGui.Add("DDL", "x+0 yp w155 AXP", ["xlsx","xls","accdb"])
 
-R_CBaddTimestamp:= MainGui.Add("CheckBox", "xs+10 y+5 w200 h25 AXP", "生成的文件名后增加时间戳")
+R_CBaddTimestamp := MainGui.Add("CheckBox", "xs+10 y+5 w200 h25 AXP", "生成的文件名后增加时间戳")
+
+R_CBopenPathAfterFinish := MainGui.Add("CheckBox", "xp y+0 wp hp AXP", "生成后打开所在路径")
 
 ;导出为Excel
 R_BTexport := MainGui.Add("Button", "xs+7 y+5 w210 h50 AXP", "导出为文件")
@@ -350,19 +354,27 @@ R_BTexport_Click(thisCtrl, Info) {
 
 	fileName := (R_CBaddTimestamp.Value ? R_EDfileName.Value "-" A_Now : R_EDfileName.Value) "." R_DDLfileExt.Text
 	path := Path_Full((R_EDpath.Value && DirExist(R_EDpath.Value) ? R_EDpath.Value : A_ScriptDir) "\" fileName)
-	if FileExist(path)
-		FileDelete(path)
-	if FileExist(R_EDtemplatePath.Value)
-	    FileCopy(R_EDtemplatePath.Value, path)
+	templatePath := Path_Full(R_EDtemplatePath.Value)
+	if FileExist(templatePath) {
+		if FileExist(path) {
+			if G.ExportRules.coveredIfFileExist {
+				try FileDelete(path)
+				try FileCopy(templatePath, path)
+			}
+		} else
+			FileCopy(templatePath, path)
+	}
 	switch R_DDLfileExt.Text {
 		case "xlsx", "xls":
-			FileUnion.ExportToExcel(path)
+			FileUnion.ExportToExcel(path, G.ExportRules)
 			MsgBox "导出成功！`n`n" path
-			Runwait('explorer.exe /select, "' path '"') ; 文件资源管理器中显示
+			if R_CBopenPathAfterFinish.Value
+				Runwait('explorer.exe /select, "' path '"') ; 文件资源管理器中显示
 		case "accdb", "mdb":
 			FileUnion.ExportToAccess(path)
 			MsgBox "导出成功！`n`n" path
-			Runwait('explorer.exe /select, "' path '"') ; 文件资源管理器中显示
+			if R_CBopenPathAfterFinish.Value
+				Runwait('explorer.exe /select, "' path '"') ; 文件资源管理器中显示
 		default:
 			MsgBox "目前暂不支持"
 	}

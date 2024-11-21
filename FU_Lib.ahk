@@ -143,8 +143,12 @@ Class FileUnion {
 			["导出模板"       , ""  ],
 			["导出文件路径"   , ""  ],
 			["导出文件名"     , ""  ],
-			["导出文件类型"   , ""  ],
 			["文件名后时间戳" , "1" ],
+			["导出文件类型"   , ""  ],
+			["文件存在时覆盖" , "1" ],
+			["工作表名称"     , ""  ],
+			["写入起始行"     , "1" ],
+			["完成后打开路径" , "1" ],
 		]
 
 		; 实例管理
@@ -308,7 +312,15 @@ Class FileUnion {
 			rules.fileExt := mp["导出文件类型"] ?? ""
 			rules.filePath := mp["导出文件路径"] ?? ""
 			rules.fileName := mp["导出文件名"] ?? ""
-			rules.addTimestamp := mp["文件名后时间戳"] ?? 1
+			rules.addTimestamp := mp["文件名后时间戳"] ?? "1"
+			rules.coveredIfFileExist := mp["文件存在时覆盖"] ?? "1"
+			rules.sheetName := mp["工作表名称"] ?? ""
+			rules.startRow := mp["写入起始行"] ?? "1"
+			rules.openPathAfterFinish := mp["完成后打开路径"] ?? "1"
+			rules.addTimestamp := !!rules.addTimestamp
+			rules.coveredIfFileExist := !!rules.coveredIfFileExist
+			rules.startRow := rules.startRow && IsDigit(rules.startRow) ? Number(rules.startRow) : 1
+			rules.openPathAfterFinish := !!rules.openPathAfterFinish
 			return rules
 		}
 
@@ -707,23 +719,30 @@ Class FileUnion {
 	/**
 	 * 导出为Excel
 	 */
-	static ExportToExcel(path) {
-		;打开或新建sheet
-		if FileExist(path)
-			book := XL.Load(path), sheet := book.active
-		else
-			book := XL.New(Path_Ext(path)), sheet := book.addSheet('Sheet1')
+	static ExportToExcel(path, rules) {
+		;打开指定的表或新建sheet
+		if FileExist(path) {
+			book := XL.Load(path)
+			if rules.sheetName {
+				try sheet := book[rules.sheetName]
+				catch
+					sheet := book.active
+			} else
+				sheet := book.active
+		} else
+			book := XL.New(Path_Ext(path)), sheet := book.addSheet(rules.sheetName || 'Sheet1')
 		;写入内容
 		for C, FieldName in this.Data.FieldNames
-			sheet[1, C].value := FieldName
+			sheet[rules.startRow, C].value := FieldName
 		if this.Data.RowCount > 1
-			sheet.InsertRowWithFormat(2, this.Data.RowCount - 1) ; 插入多行带格式的行
+			sheet.InsertRowWithFormat(rules.startRow + 1, this.Data.RowCount - 1) ; 插入多行带格式的行
 		for i, row in this.Data {
+			R := rules.startRow + i
 			for C, value in row {
 				if SubStr(value,1,1) = "="
-					sheet.writeFormula(i + 1, C, value)
+					sheet.writeFormula(R, C, value)
 				else
-					sheet[i + 1, C].value := IsNumber(value) ? Number(value) : value
+					sheet[R, C].value := IsNumber(value) ? Number(value) : value
 			}
 		}
 		;保存并关闭
