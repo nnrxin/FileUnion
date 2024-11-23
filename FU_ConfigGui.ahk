@@ -687,7 +687,7 @@ C5_BTreset.OnEvent("Click", (*) {
 ;=========================
 #HotIf (WinActive("ahk_id " ConfigGui.Hwnd))
 ;插入
-Insert:: {
+~Insert:: {
 	Switch ConfigGui.FocusedCtrl
 	{
 	case C_LV: C_LV.AddConfig()
@@ -696,7 +696,7 @@ Insert:: {
 	}
 }
 ;删除
-Delete:: {
+~Delete:: {
 	Switch ConfigGui.FocusedCtrl
 	{
 	case C_LV: C_LV.DeleteConfig()
